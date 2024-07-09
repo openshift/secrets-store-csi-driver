@@ -11,7 +11,13 @@ export ANNOTATION_VALUE=${ANNOTATION_VALUE:-"app=test"}
 
 @test "install vault provider" {
   # create the ns vault
+
+  oc delete project vault --ignore-not-found=true
   kubectl create ns vault
+  kubectl label ns vault security.openshift.io/scc.podSecurityLabelSync=false pod-security.kubernetes.io/enforce=privileged pod-security.kubernetes.io/audit=privileged pod-security.kubernetes.io/warn=privileged --overwrite
+  oc adm policy add-scc-to-user privileged system:serviceaccount:vault:vault
+  oc adm policy add-scc-to-user privileged system:serviceaccount:vault:vault-csi-provider
+
   # install the vault provider using the helm charts
   # pinning this to a fixed version (1.7.0)
   helm repo add hashicorp https://helm.releases.hashicorp.com
@@ -19,7 +25,15 @@ export ANNOTATION_VALUE=${ANNOTATION_VALUE:-"app=test"}
   helm install vault hashicorp/vault --namespace=vault \
         --set "server.dev.enabled=true" \
         --set "injector.enabled=false" \
-        --set "csi.enabled=true"
+        --set "csi.enabled=true" \
+        --set "global.openshift=true" \
+        --set "injector.agentImage.repository=docker.io/hashicorp/vault" \
+        --set "server.image.repository=docker.io/hashicorp/vault" \
+        --set "csi.image.repository=docker.io/hashicorp/vault-csi-provider" \
+        --set "csi.agent.image.repository=docker.io/hashicorp/vault" \
+        --set "csi.daemonSet.providersDir=/var/run/secrets-store-csi-providers"
+  oc patch daemonset -n vault vault-csi-provider --type='json' -p='[{"op": "add", "path": "/spec/template/spec/containers/0/securityContext", "value": {"privileged": true} }]'
+  sleep 10 
 
   # wait for vault and vault-csi-provider pods to be running
   kubectl wait --for=condition=Ready --timeout=120s pods --all -n vault
@@ -100,7 +114,7 @@ EOF
   # update the secret value
   kubectl exec vault-0 --namespace=vault -- vault kv put secret/rotation foo=rotated
 
-  sleep 60
+  sleep 90
 
   # verify rotated value
   result=$(kubectl exec secrets-store-rotation -- cat /mnt/secrets-store/foo)
@@ -196,7 +210,9 @@ EOF
 }
 
 @test "Test Namespaced scope SecretProviderClass - create deployment" {
+  oc delete project test-ns --ignore-not-found=true
   kubectl create ns test-ns
+  kubectl label ns test-ns security.openshift.io/scc.podSecurityLabelSync=false pod-security.kubernetes.io/enforce=privileged pod-security.kubernetes.io/audit=privileged pod-security.kubernetes.io/warn=privileged --overwrite
 
   kubectl apply -f $BATS_TESTS_DIR/vault_v1_secretproviderclass_ns.yaml
   kubectl wait --for condition=established --timeout=60s crd/secretproviderclasses.secrets-store.csi.x-k8s.io
@@ -239,7 +255,9 @@ EOF
 }
 
 @test "Test Namespaced scope SecretProviderClass - Should fail when no secret provider class in same namespace" {
+  oc delete project negative-test-ns --ignore-not-found=true
   kubectl create ns negative-test-ns
+  kubectl label ns negative-test-ns security.openshift.io/scc.podSecurityLabelSync=false pod-security.kubernetes.io/enforce=privileged pod-security.kubernetes.io/audit=privileged pod-security.kubernetes.io/warn=privileged --overwrite
 
   kubectl apply -n negative-test-ns -f $BATS_TESTS_DIR/deployment-synck8s.yaml
 
