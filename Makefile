@@ -262,7 +262,7 @@ shellcheck: $(SHELLCHECK)
 ## --------------------------------------
 .PHONY: build
 build:
-	GOPROXY=$(GOPROXY) CGO_ENABLED=0 GOOS=linux go build -a -ldflags $(LDFLAGS) -o _output/secrets-store-csi ./cmd/secrets-store-csi-driver
+	GOPROXY=$(GOPROXY) CGO_ENABLED=0 GOOS=linux go build -mod=vendor -a -ldflags $(LDFLAGS) -o _output/secrets-store-csi ./cmd/secrets-store-csi-driver
 
 .PHONY: build-e2e-provider
 build-e2e-provider:
@@ -270,7 +270,7 @@ build-e2e-provider:
 
 .PHONY: build-windows
 build-windows:
-	GOPROXY=$(GOPROXY) CGO_ENABLED=0 GOOS=windows go build -a -ldflags $(LDFLAGS) -o _output/secrets-store-csi.exe ./cmd/secrets-store-csi-driver
+	GOPROXY=$(GOPROXY) CGO_ENABLED=0 GOOS=windows go build -mod=vendor -a -ldflags $(LDFLAGS) -o _output/secrets-store-csi.exe ./cmd/secrets-store-csi-driver
 
 .PHONY: build-darwin
 build-darwin:
