@@ -23,7 +23,7 @@ spec:
           objectType: secretsmanager
         - objectName: $SM_TEST_1_NAME
           objectType: secretsmanager
-        - objectName: arn:aws:secretsmanager:${REGION}:${ACCOUNT_NUMBER}:secret:${SM_TEST_2_NAME}
+        - objectName: arn:aws:secretsmanager:${REGION}:${AWS_ACCOUNT_ID}:secret:${SM_TEST_2_NAME}
           objectAlias: SecretsManagerTest2
         - objectName: $SM_SYNC_NAME
           objectType: secretsmanager

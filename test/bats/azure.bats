@@ -5,7 +5,6 @@ load helpers
 BATS_TESTS_DIR=test/bats/tests/azure
 WAIT_TIME=60
 SLEEP_TIME=1
-NAMESPACE=kube-system
 NODE_SELECTOR_OS=linux
 BASE64_FLAGS="-w 0"
 if [[ "$OSTYPE" == *"darwin"* ]]; then
@@ -29,10 +28,11 @@ export SECRET_NAME=${KEYVAULT_SECRET_NAME:-secret1}
 export SECRET_VERSION=${KEYVAULT_SECRET_VERSION:-""}
 export SECRET_VALUE=${KEYVAULT_SECRET_VALUE:-"test"}
 export KEY_NAME=${KEYVAULT_KEY_NAME:-key1}
-export KEY_VERSION=${KEYVAULT_KEY_VERSION:-7cc095105411491b84fe1b92ebbcf01a}
+# export KEY_VERSION=${KEYVAULT_KEY_VERSION:-7cc095105411491b84fe1b92ebbcf01a}
 export KEY_VALUE_CONTAINS=${KEYVAULT_KEY_VALUE:-"LS0tLS1CRUdJTiBQVUJMSUMgS0VZLS0tLS0KTUlJQklqQU5CZ2txaGtpRzl3MEJBUUVGQUFPQ0FROEFNSUlCQ2dLQ0FRRUF4K2FadlhJN2FldG5DbzI3akVScgpheklaQ2QxUlBCQVZuQU1XcDhqY05TQk5MOXVuOVJrenJHOFd1SFBXUXNqQTA2RXRIOFNSNWtTNlQvaGQwMFNRCk1aODBMTlNxYkkwTzBMcWMzMHNLUjhTQ0R1cEt5dkpkb01LSVlNWHQzUlk5R2Ywam1ucHNKOE9WbDFvZlRjOTIKd1RINXYyT2I1QjZaMFd3d25MWlNiRkFnSE1uTHJtdEtwZTVNcnRGU21nZS9SL0J5ZXNscGU0M1FubnpndzhRTwpzU3ZMNnhDU21XVW9WQURLL1MxREU0NzZBREM2a2hGTjF5ZHUzbjVBcnREVGI0c0FjUHdTeXB3WGdNM3Y5WHpnClFKSkRGT0JJOXhSTW9UM2FjUWl0Z0c2RGZibUgzOWQ3VU83M0o3dUFQWUpURG1pZGhrK0ZFOG9lbjZWUG9YRy8KNXdJREFRQUIKLS0tLS1FTkQgUFVCTElDIEtFWS0tLS0t"}
 export LABEL_VALUE=${LABEL_VALUE:-"test"}
 export NODE_SELECTOR_OS=$NODE_SELECTOR_OS
+export NAMESPACE=${NAMESPACE:-"kube-system"} 
 
 # export the secrets-store API version to be used
 # TODO (aramase) remove this once the upgrade tests are moved to use e2e-provider
@@ -50,11 +50,14 @@ setup() {
   helm repo add csi-provider-azure https://azure.github.io/secrets-store-csi-driver-provider-azure/charts
   helm repo update
   helm upgrade --install csi csi-provider-azure/csi-secrets-store-provider-azure --namespace $NAMESPACE \
-        --set "secrets-store-csi-driver.install=false" \
-        --set "windows.enabled=$TEST_WINDOWS" \
-        --set "logVerbosity=5" \
-        --set "logFormatJSON=true" \
-
+    --set "secrets-store-csi-driver.install=false" \
+    --set "logVerbosity=5" \
+    --set "logFormatJSON=true" \
+    --set "fullnameOverride=csi-secrets-store-provider-azure"
+  
+  kubectl get ds -n $NAMESPACE
+  oc adm policy add-scc-to-user privileged -z csi-secrets-store-provider-azure -n $NAMESPACE
+  sleep 30 
   # wait for azure-csi-provider pod to be running
   kubectl wait --for=condition=Ready --timeout=150s pods -l app=csi-secrets-store-provider-azure --namespace $NAMESPACE
 }
@@ -151,7 +154,7 @@ setup() {
   result=$(kubectl get secret foosecret -o jsonpath="{.data.username}" | base64 -d)
   [[ "${result//$'\r'}" == "${SECRET_VALUE}" ]]
 
-  result=$(kubectl exec $POD -- printenv | grep SECRET_USERNAME) | awk -F"=" '{ print $2}'
+  result=$(kubectl exec $POD -- printenv | grep SECRET_USERNAME | awk -F"=" '{ print $2}')
   [[ "${result//$'\r'}" == "${SECRET_VALUE}" ]]
 
   result=$(kubectl get secret foosecret -o jsonpath="{.metadata.labels.environment}")
@@ -181,8 +184,9 @@ setup() {
 }
 
 @test "Test Namespaced scope SecretProviderClass - create deployment" {
-  run kubectl create ns test-ns
-  assert_success
+  kubectl delete project test-ns --ignore-not-found=true
+  kubectl create ns test-ns
+  kubectl label ns test-ns security.openshift.io/scc.podSecurityLabelSync=false pod-security.kubernetes.io/enforce=privileged pod-security.kubernetes.io/audit=privileged pod-security.kubernetes.io/warn=privileged --overwrite
 
   run kubectl create secret generic secrets-store-creds --from-literal clientid=${AZURE_CLIENT_ID} --from-literal clientsecret=${AZURE_CLIENT_SECRET} -n test-ns
   assert_success
@@ -219,7 +223,7 @@ setup() {
   result=$(kubectl get secret foosecret -n test-ns -o jsonpath="{.data.username}" | base64 -d)
   [[ "${result//$'\r'}" == "${SECRET_VALUE}" ]]
 
-  result=$(kubectl exec -n test-ns $POD -- printenv | grep SECRET_USERNAME) | awk -F"=" '{ print $2}'
+  result=$(kubectl exec -n test-ns $POD -- printenv | grep SECRET_USERNAME | awk -F"=" '{ print $2}')
   [[ "${result//$'\r'}" == "${SECRET_VALUE}" ]]
 
   run wait_for_process $WAIT_TIME $SLEEP_TIME "compare_owner_count foosecret test-ns 1"
@@ -235,8 +239,9 @@ setup() {
 }
 
 @test "Test Namespaced scope SecretProviderClass - Should fail when no secret provider class in same namespace" {
-  run kubectl create ns negative-test-ns
-  assert_success
+  kubectl delete project negative-test-ns --ignore-not-found=true
+  kubectl create ns negative-test-ns
+  kubectl label ns negative-test-ns security.openshift.io/scc.podSecurityLabelSync=false pod-security.kubernetes.io/enforce=privileged pod-security.kubernetes.io/audit=privileged pod-security.kubernetes.io/warn=privileged --overwrite
 
   run kubectl create secret generic secrets-store-creds --from-literal clientid=${AZURE_CLIENT_ID} --from-literal clientsecret=${AZURE_CLIENT_SECRET} -n negative-test-ns
   assert_success
@@ -298,7 +303,7 @@ setup() {
   result=$(kubectl get secret foosecret-0 -o jsonpath="{.data.username}" | base64 -d)
   [[ "${result//$'\r'}" == "${SECRET_VALUE}" ]]
 
-  result=$(kubectl exec secrets-store-inline-multiple-crd -- printenv | grep SECRET_USERNAME_0) | awk -F"=" '{ print $2}'
+  result=$(kubectl exec secrets-store-inline-multiple-crd -- printenv | grep SECRET_USERNAME_0 | awk -F"=" '{ print $2}')
   [[ "${result//$'\r'}" == "${SECRET_VALUE}" ]]
 
   run wait_for_process $WAIT_TIME $SLEEP_TIME "compare_owner_count foosecret-0 default 1"
@@ -307,7 +312,7 @@ setup() {
   result=$(kubectl get secret foosecret-1 -o jsonpath="{.data.username}" | base64 -d)
   [[ "${result//$'\r'}" == "${SECRET_VALUE}" ]]
 
-  result=$(kubectl exec secrets-store-inline-multiple-crd -- printenv | grep SECRET_USERNAME_1) | awk -F"=" '{ print $2}'
+  result=$(kubectl exec secrets-store-inline-multiple-crd -- printenv | grep SECRET_USERNAME_1 | awk -F"=" '{ print $2}')
   [[ "${result//$'\r'}" == "${SECRET_VALUE}" ]]
 
   run wait_for_process $WAIT_TIME $SLEEP_TIME "compare_owner_count foosecret-1 default 1"
@@ -315,8 +320,9 @@ setup() {
 }
 
 @test "Test auto rotation of mount contents and K8s secrets - Create deployment" {
-  run kubectl create ns rotation
-  assert_success
+  kubectl delete project rotation --ignore-not-found=true
+  kubectl create ns rotation
+  kubectl label ns rotation security.openshift.io/scc.podSecurityLabelSync=false pod-security.kubernetes.io/enforce=privileged pod-security.kubernetes.io/audit=privileged pod-security.kubernetes.io/warn=privileged --overwrite
 
   run kubectl create secret generic secrets-store-creds --from-literal clientid=${AZURE_CLIENT_ID} --from-literal clientsecret=${AZURE_CLIENT_SECRET} -n rotation
   assert_success
@@ -325,7 +331,7 @@ setup() {
   run kubectl label secret secrets-store-creds secrets-store.csi.k8s.io/used=true -n rotation
   assert_success
 
-  run az login -u ${AZURE_CLIENT_ID} -p ${AZURE_CLIENT_SECRET} -t ${TENANT_ID} --service-principal
+  run az login -u ${AZURE_CLUSTER_ID} -p ${AZURE_CLUSTER_SECRET} -t ${TENANT_ID} --service-principal
   assert_success
 
   run az keyvault secret set --vault-name ${KEYVAULT_NAME} --name ${AUTO_ROTATE_SECRET_NAME} --value secret
@@ -376,4 +382,5 @@ teardown_file() {
   run kubectl delete secret secrets-store-creds
 
   run kubectl delete pods secrets-store-inline-crd secrets-store-inline-multiple-crd --force --grace-period 0
+  run kubectl delete secretproviderclass --all 
 }
