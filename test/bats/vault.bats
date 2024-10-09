@@ -36,9 +36,7 @@ export ANNOTATION_VALUE=${ANNOTATION_VALUE:-"app=test"}
   sleep 10 
 
   # wait for vault and vault-csi-provider pods to be running
-  oc wait --for=jsonpath=.status.readyReplicas=1 --timeout=120s statefulset/vault -n vault
-  num_pods_scheduled=$(oc get daemonset/vault-csi-provider -n vault -o jsonpath='{.status.desiredNumberScheduled}')
-  oc wait --for=jsonpath=.status.numberReady=${num_pods_scheduled} --timeout=120s daemonset/vault-csi-provider -n vault
+  kubectl wait --for=condition=Ready --timeout=120s pods --all -n vault
 }
 
 @test "setup vault" {
@@ -116,7 +114,7 @@ EOF
   # update the secret value
   kubectl exec vault-0 --namespace=vault -- vault kv put secret/rotation foo=rotated
 
-  sleep 120
+  sleep 90
 
   # verify rotated value
   result=$(kubectl exec secrets-store-rotation -- cat /mnt/secrets-store/foo)
