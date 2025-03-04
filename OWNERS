@@ -1,11 +1,3 @@
 approvers:
-- aramase
-- ritazh
-
-reviewers:
-- aramase
-- nilekhc
-- ritazh
-
-emeritus_approvers:
-- tam7t
+- openshift-storage-maintainers
+component: "Storage / Kubernetes External Components"

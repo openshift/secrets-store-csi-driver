@@ -260,11 +260,11 @@ shellcheck: $(SHELLCHECK)
 
 .PHONY: build
 build: ## Build Secret Store CSI Driver binary
-	GOPROXY=$(GOPROXY) CGO_ENABLED=0 GOOS=linux go build -a -ldflags $(LDFLAGS) -o _output/secrets-store-csi ./cmd/secrets-store-csi-driver
+	GOPROXY=$(GOPROXY) CGO_ENABLED=1 GOEXPERIMENT=strictfipsruntime GOOS=linux go build -mod=vendor -a -tags "strictfipsruntime,openssl" -ldflags $(LDFLAGS) -o _output/secrets-store-csi ./cmd/secrets-store-csi-driver
 
 .PHONY: build-e2e-provider
 build-e2e-provider:
-	cd test/e2eprovider && GOPROXY=$(GOPROXY) CGO_ENABLED=0 GOOS=linux go build -a -tags "e2e" -o e2e-provider
+	cd test/e2eprovider && GOPROXY=$(GOPROXY) CGO_ENABLED=0 GOOS=linux go build -mod=vendor -a -tags "e2e" -o e2e-provider
 
 .PHONY: build-windows
 build-windows:
