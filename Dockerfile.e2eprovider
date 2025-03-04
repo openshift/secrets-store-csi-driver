@@ -1,0 +1,11 @@
+FROM registry.ci.openshift.org/ocp/builder:rhel-9-golang-1.24-openshift-4.20 AS builder
+WORKDIR /go/src/github.com/openshift/secrets-store-csi-driver
+COPY . .
+RUN make build-e2e-provider
+
+FROM registry.ci.openshift.org/ocp/4.20:base-rhel9
+COPY --from=builder /go/src/github.com/openshift/secrets-store-csi-driver/test/e2eprovider/e2e-provider /e2e-provider
+
+LABEL description="Mock provider for Secrets Store CSI Driver"
+
+ENTRYPOINT ["/e2e-provider"]
