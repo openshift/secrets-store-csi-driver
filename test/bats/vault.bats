@@ -263,6 +263,8 @@ EOF
 
   kubectl apply -n negative-test-ns -f $BATS_TESTS_DIR/deployment-synck8s.yaml
 
+  # wait for pod to be created
+  kubectl wait --for=jsonpath='{.status.replicas}'=2 deployment -l app=busybox -n negative-test-ns --timeout=60s
   POD=$(kubectl get pod -l app=busybox -n negative-test-ns -o jsonpath="{.items[0].metadata.name}")
   cmd="kubectl describe pod $POD -n negative-test-ns | grep 'FailedMount.*failed to get secretproviderclass negative-test-ns/vault-foo-sync.*not found'"
   wait_for_process $WAIT_TIME $SLEEP_TIME "$cmd"
