@@ -2,6 +2,8 @@ FROM registry.ci.openshift.org/ocp/builder:rhel-9-golang-1.23-openshift-4.19 AS 
 WORKDIR /go/src/github.com/openshift/secrets-store-csi-driver
 COPY . .
 RUN make build
+# Print build settings information embedded in the binary.
+RUN go version -m _output/secrets-store-csi
 
 FROM registry.ci.openshift.org/ocp/4.19:base-rhel9
 COPY --from=builder /go/src/github.com/openshift/secrets-store-csi-driver/_output/secrets-store-csi /bin/secrets-store-csi
