@@ -23,39 +23,52 @@ setup_file() {
   export GCP_WORKLOAD_IDENTITY_POOL=wif-pool-$RANDOM_NUM
   export GCP_WORKLOAD_IDENTITY_PROVIDER=$GCP_WORKLOAD_IDENTITY_POOL-oidc
   export LOCATION="global"
-  export AUDIENCE=//iam.googleapis.com/projects/$GCP_PROJECT_NUM/locations/$LOCATION/workloadIdentityPools/$GCP_WORKLOAD_IDENTITY_POOL/providers/$GCP_WORKLOAD_IDENTITY_PROVIDER
+  export WI_POOL_PATH=projects/$GCP_PROJECT_NUM/locations/$LOCATION/workloadIdentityPools/$GCP_WORKLOAD_IDENTITY_POOL
 
-  #create gcp workload identity pool and provider
+  # create gcp workload identity pool and provider
   OIDC_ISSUER=$(kubectl get --raw /.well-known/openid-configuration | jq -r .issuer )
   kubectl get --raw /openid/v1/jwks > cluster-jwks.json
 
-  gcloud iam workload-identity-pools create $GCP_WORKLOAD_IDENTITY_POOL     --location="$LOCATION"     --description="$GCP_WORKLOAD_IDENTITY_POOL"     --display-name="$GCP_WORKLOAD_IDENTITY_POOL"
+  gcloud iam workload-identity-pools create $GCP_WORKLOAD_IDENTITY_POOL \
+      --location="$LOCATION" \
+      --description="$GCP_WORKLOAD_IDENTITY_POOL" \
+      --display-name="$GCP_WORKLOAD_IDENTITY_POOL"
 
-  gcloud iam workload-identity-pools providers create-oidc $GCP_WORKLOAD_IDENTITY_PROVIDER     --location="$LOCATION"     --workload-identity-pool=$GCP_WORKLOAD_IDENTITY_POOL     --issuer-uri=$OIDC_ISSUER     --attribute-mapping="google.subject=assertion.sub"     --jwk-json-path="cluster-jwks.json"
+  gcloud iam workload-identity-pools providers create-oidc $GCP_WORKLOAD_IDENTITY_PROVIDER \
+      --location="$LOCATION" \
+      --workload-identity-pool=$GCP_WORKLOAD_IDENTITY_POOL \
+      --issuer-uri=$OIDC_ISSUER \
+      --attribute-mapping="google.subject=assertion.sub" \
+      --jwk-json-path="cluster-jwks.json"
 
-  gcloud iam workload-identity-pools create-cred-config     projects/$GCP_PROJECT_NUM/locations/$LOCATION/workloadIdentityPools/$GCP_WORKLOAD_IDENTITY_POOL/providers/$GCP_WORKLOAD_IDENTITY_PROVIDER     --credential-source-file=/var/run/service-account/token     --credential-source-type=text     --output-file=credential-configuration.json
+  gcloud iam workload-identity-pools create-cred-config $WI_POOL_PATH/providers/$GCP_WORKLOAD_IDENTITY_PROVIDER \
+      --credential-source-file=/var/run/service-account/token \
+      --credential-source-type=text \
+      --output-file=credential-configuration.json
 
-  #create a configmap with credenital-configuration.json
+  # create a configmap with credenital-configuration.json
   oc create configmap gcp-cred-cm   --from-file credential-configuration.json -n $PROVIDER_NAMESPACE
   rm credential-configuration.json
 
-  #create a secret
+  # create a secret
   echo "$SECRET_VALUE" > secret.data
   echo "SECRET_ID: $SECRET_ID"
   gcloud secrets create $SECRET_ID --replication-policy=automatic --data-file=secret.data
   rm secret.data
 
   sleep 10
-  #give permission to default service account to be able to access the secret
-  gcloud secrets add-iam-policy-binding $SECRET_ID --member="principal://iam.googleapis.com/projects/$GCP_PROJECT_NUM/locations/$LOCATION/workloadIdentityPools/$GCP_WORKLOAD_IDENTITY_POOL/subject/system:serviceaccount:default:default" --role=roles/secretmanager.secretAccessor
+  # give permission to default service account to be able to access the secret
+  gcloud secrets add-iam-policy-binding $SECRET_ID \
+      --member="principal://iam.googleapis.com/$WI_POOL_PATH/subject/system:serviceaccount:default:default" \
+      --role=roles/secretmanager.secretAccessor
   sleep 20
 }
 
 @test "install gcp provider" {
   #run kubectl apply -f $PROVIDER_YAML --namespace $PROVIDER_NAMESPACE
 
+  oc adm policy add-scc-to-user privileged -z csi-secrets-store-provider-gcp -n $PROVIDER_NAMESPACE
   run kubectl apply -f $BATS_TESTS_DIR/$GCP_PROVIDER
-  oc adm policy add-scc-to-user privileged -z csi-secrets-store-provider-gcp -n openshift-cluster-csi-drivers
   assert_success
 
   kubectl wait --for=condition=Ready --timeout=120s pod -l app=csi-secrets-store-provider-gcp --namespace $PROVIDER_NAMESPACE
@@ -123,15 +136,13 @@ setup_file() {
 }
 
 teardown_file() {
-  #delete configmap
+  # delete configmap
   oc delete cm gcp-cred-cm -n $PROVIDER_NAMESPACE
-
-  run kubectl delete -f $BATS_TESTS_DIR/$GCP_PROVIDER
-
-  #delete secret
+  
+  # delete secret
   gcloud secrets delete $SECRET_ID --quiet
 
-  #delete workload identity pool and provider
+  # delete workload identity pool and provider
   gcloud iam workload-identity-pools providers delete $GCP_WORKLOAD_IDENTITY_PROVIDER \
     --workload-identity-pool=$GCP_WORKLOAD_IDENTITY_POOL \
     --location=$LOCATION \

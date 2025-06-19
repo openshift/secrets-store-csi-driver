@@ -10,6 +10,12 @@ RUN unzip awscliv2.zip > /dev/null 2>&1
 RUN ./aws/install
 RUN aws --version
 
+# Install gcloud cli
+RUN curl -O https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-linux-x86_64.tar.gz
+RUN tar -xf google-cloud-cli-linux-x86_64.tar.gz
+RUN ./google-cloud-sdk/install.sh
+RUN ./google-cloud-sdk/bin/gcloud init
+
 # "src" is built by a prow job when building final images.
 # It contains full repository sources + jq + pyhon with yaml module.
 FROM src
