@@ -26,7 +26,7 @@ COPY --from=builder /usr/local/bin/yq /usr/local/bin
 COPY --from=builder /usr/local/aws-cli/ /usr/local/aws-cli/
 RUN ln -s /usr/local/aws-cli/v2/current/bin/aws /usr/local/bin/aws
 RUN aws --version
-COPY --from=builder /google-cloud-sdk/ /usr/local/google-cloud-sdk/
+COPY --from=builder google-cloud-sdk/ /usr/local/google-cloud-sdk/
 RUN ln -s /usr/local/google-cloud-sdk/bin/gcloud /usr/local/bin/gcloud
 RUN gcloud version
 
