@@ -14,7 +14,7 @@ RUN aws --version
 RUN curl -O https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-linux-x86_64.tar.gz
 RUN tar -xf google-cloud-cli-linux-x86_64.tar.gz
 RUN ./google-cloud-sdk/install.sh
-RUN ./google-cloud-sdk/bin/gcloud init
+RUN ./google-cloud-sdk/bin/gcloud version
 
 # "src" is built by a prow job when building final images.
 # It contains full repository sources + jq + pyhon with yaml module.
@@ -26,6 +26,9 @@ COPY --from=builder /usr/local/bin/yq /usr/local/bin
 COPY --from=builder /usr/local/aws-cli/ /usr/local/aws-cli/
 RUN ln -s /usr/local/aws-cli/v2/current/bin/aws /usr/local/bin/aws
 RUN aws --version
+COPY --from=builder /google-cloud-sdk/ /usr/local/google-cloud-sdk/
+RUN ln -s /usr/local/google-cloud-sdk/bin/gcloud /usr/local/bin/gcloud
+RUN gcloud version
 
 # Install envsubst and less
 RUN dnf install -y gettext less && dnf clean all

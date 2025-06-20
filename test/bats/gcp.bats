@@ -16,7 +16,7 @@ setup_file() {
   export GCP_PROVIDER=gcp-provider.yaml
   export RANDOM_NUM=$(echo $RANDOM | md5sum | head -c 8)
   export SECRET_ID=test-secret-$RANDOM_NUM
-  export FILE_NAME=testsecret1.txt
+  export FILE_NAME=${FILE_NAME:-"secret"}
   export GCP_PROJECT_ID=$(gcloud config get-value project)
   export GCP_PROJECT_NUM=$(gcloud projects describe $(gcloud config get-value project) --format="value(projectNumber)")
   export RESOURCE_NAME=projects/$GCP_PROJECT_ID/secrets/$SECRET_ID/versions/latest
@@ -67,9 +67,9 @@ setup_file() {
 @test "install gcp provider" {
   #run kubectl apply -f $PROVIDER_YAML --namespace $PROVIDER_NAMESPACE
 
-  oc adm policy add-scc-to-user privileged -z csi-secrets-store-provider-gcp -n $PROVIDER_NAMESPACE
   run kubectl apply -f $BATS_TESTS_DIR/$GCP_PROVIDER
   assert_success
+  oc adm policy add-scc-to-user privileged -z csi-secrets-store-provider-gcp -n $PROVIDER_NAMESPACE
 
   kubectl wait --for=condition=Ready --timeout=120s pod -l app=csi-secrets-store-provider-gcp --namespace $PROVIDER_NAMESPACE
 
