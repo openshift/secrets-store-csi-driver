@@ -32,55 +32,10 @@ export PM_ROTATION_TEST_NAME=ParameterStoreRotationTest-$UUID
 
 setup_file() {
 
-  export AWS_USER_PAS_POLICY="${CLUSTER_NAME:0:12}-ParameterAndSecret-access-${UUID}"
   export CSI_APP_ROLE_NAME="${CLUSTER_NAME:0:12}-csi-app-role-${UUID}"
   export CSI_APP_POLICY_NAME="${CLUSTER_NAME:0:12}-csi-app-policy-${UUID}"
 
-  cat > $BATS_TEST_DIR/aws-user-pas-policy.json <<EOF
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Sid": "AllowPutGetDeleteSpecificSSMParameters",
-      "Effect": "Allow",
-      "Action": [
-        "ssm:PutParameter",
-        "ssm:GetParameter",
-        "ssm:DeleteParameter"
-      ],
-      "Resource": [
-        "arn:aws:ssm:${REGION}:${ACCOUNT_NUMBER}:parameter/${PM_TEST_1_NAME}",
-        "arn:aws:ssm:${REGION}:${ACCOUNT_NUMBER}:parameter/${PM_TEST_LONG_NAME}",
-        "arn:aws:ssm:${REGION}:${ACCOUNT_NUMBER}:parameter/${PM_ROTATION_TEST_NAME}"
-      ]
-    },
-    {
-      "Sid": "AllowCreateGetDeleteSpecificSecrets",
-      "Effect": "Allow",
-      "Action": [
-        "secretsmanager:CreateSecret",
-        "secretsmanager:GetSecretValue",
-        "secretsmanager:DeleteSecret",
-        "secretsmanager:PutSecretValue"
-      ],
-      "Resource": [
-        "arn:aws:secretsmanager:${REGION}:${ACCOUNT_NUMBER}:secret:${SM_TEST_1_NAME}*",
-        "arn:aws:secretsmanager:${REGION}:${ACCOUNT_NUMBER}:secret:${SM_TEST_2_NAME}*",
-        "arn:aws:secretsmanager:${REGION}:${ACCOUNT_NUMBER}:secret:${SM_SYNC_NAME}*",
-        "arn:aws:secretsmanager:${REGION}:${ACCOUNT_NUMBER}:secret:${SM_ROT_TEST_NAME}*"
-      ]
-    }
-  ]
-}
-EOF
-
-  PAS_POLICY=$(aws iam create-policy --policy-name "${AWS_USER_PAS_POLICY}" \
-  --policy-document file://$BATS_TEST_DIR/aws-user-pas-policy.json \
-  --query 'Policy.Arn' --output text)
-
-  aws iam attach-user-policy --user-name $AWS_USER_NAME --policy-arn $PAS_POLICY
-
-  #Create test secrets
+  # Create test secrets
   aws secretsmanager create-secret --name $SM_TEST_1_NAME --secret-string SecretsManagerTest1Value --region $REGION
   aws secretsmanager create-secret --name $SM_TEST_2_NAME --secret-string SecretsManagerTest2Value --region $REGION
   aws secretsmanager create-secret --name $SM_SYNC_NAME --secret-string SecretUser --region $REGION
@@ -179,9 +134,6 @@ teardown_file() {
     aws iam detach-role-policy --role-name "${CSI_APP_ROLE_NAME}" --policy-arn "$POLICY"
     aws iam delete-policy --policy-arn "$POLICY"
     aws iam delete-role --role-name "${CSI_APP_ROLE_NAME}"
-
-    aws iam detach-user-policy --user-name $AWS_USER_NAME --policy-arn $PAS_POLICY
-    aws iam delete-policy --policy-arn $PAS_POLICY
 }
 
 @test "Install aws provider" {
@@ -226,7 +178,7 @@ teardown_file() {
    [[ "${result//$'\r'}" == "BeforeRotation" ]]
 
    aws ssm put-parameter --name $PM_ROTATION_TEST_NAME --value AfterRotation --type SecureString --overwrite --region $REGION
-   sleep 120
+   sleep 40
    result=$(kubectl --namespace $NAMESPACE exec $POD_NAME -- cat /mnt/secrets-store/$PM_ROTATION_TEST_NAME)
    [[ "${result//$'\r'}" == "AfterRotation" ]]
 }
@@ -236,7 +188,7 @@ teardown_file() {
    [[ "${result//$'\r'}" == "BeforeRotation" ]]
   
    aws secretsmanager put-secret-value --secret-id $SM_ROT_TEST_NAME --secret-string AfterRotation --region $REGION
-   sleep 120
+   sleep 40
    result=$(kubectl --namespace $NAMESPACE exec $POD_NAME -- cat /mnt/secrets-store/$SM_ROT_TEST_NAME)
    [[ "${result//$'\r'}" == "AfterRotation" ]]
 }
@@ -290,6 +242,8 @@ teardown_file() {
   assert_success
 }
 
+# We have commented this out because the previously 
+# defined teardown_file() is getting overwritten.
 # teardown_file() {
 #   archive_info || true
 # }
