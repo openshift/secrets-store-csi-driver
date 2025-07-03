@@ -4,6 +4,7 @@ metadata:
   name: busybox-deployment-two
   labels:
     app: busybox
+    azure.workload.identity/use: "true"
 spec:
   replicas: 2
   selector:

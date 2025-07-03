@@ -2,6 +2,8 @@ kind: Pod
 apiVersion: v1
 metadata:
   name: secrets-store-inline-multiple-crd
+  labels:
+    azure.workload.identity/use: "true"
 spec:
   terminationGracePeriodSeconds: 0
   containers:

@@ -6,7 +6,7 @@ BATS_TESTS_DIR=test/bats/tests/azure
 WAIT_TIME=60
 SLEEP_TIME=1
 NAMESPACE=default
-PROVIDER_NAMESPACE=kube-system
+PROVIDER_NAMESPACE=openshift-cluster-csi-drivers
 NODE_SELECTOR_OS=linux
 BASE64_FLAGS="-w 0"
 if [[ "$OSTYPE" == *"darwin"* ]]; then
@@ -17,10 +17,19 @@ if [ $TEST_WINDOWS ]; then
   NODE_SELECTOR_OS=windows
 fi
 
-export KEYVAULT_NAME=${KEYVAULT_NAME:-secrets-store-csi-e2e}
+# key-vault configuration
+export KEYVAULT_NAME=${KEYVAULT_NAME:-sscsi-e2e-vault-$(openssl rand -hex 2)}
 export SECRET_NAME=${KEYVAULT_SECRET_NAME:-secret1}
 export SECRET_VERSION=${KEYVAULT_SECRET_VERSION:-""}
 export SECRET_VALUE=${KEYVAULT_SECRET_VALUE:-"test"}
+
+export RESOURCE_GROUP=$(oc get infrastructure cluster -o=jsonpath='{.status.platformStatus.azure.resourceGroupName}')
+export LOCATION=$(az group show --name $RESOURCE_GROUP --query location --output tsv)
+export USER_ASSIGNED_IDENTITY_NAME="sscsi-e2e-uami-$(openssl rand -hex 2)"
+
+export OIDC_PROVIDER=$(oc get authentication.config.openshift.io cluster -o jsonpath='{.spec.serviceAccountIssuer}')
+export AZURE_TENANT_ID=$(az account get-access-token --query tenant --output tsv)
+
 export LABEL_VALUE=${LABEL_VALUE:-"test"}
 export NODE_SELECTOR_OS=$NODE_SELECTOR_OS
 
@@ -28,8 +37,62 @@ export NODE_SELECTOR_OS=$NODE_SELECTOR_OS
 # TODO (aramase) remove this once the upgrade tests are moved to use e2e-provider
 export API_VERSION=$(get_secrets_store_api_version)
 
+
+setup_file(){
+echo "Create New Resource Group"
+ echo "Create Key Vault"
+  # create new key vault
+  az keyvault create --resource-group "${RESOURCE_GROUP}" \
+   --location "${LOCATION}" \
+   --name "${KEYVAULT_NAME}" \
+   --enable-rbac-authorization false
+
+  # set value in the key vault
+  az keyvault secret set --vault-name "${KEYVAULT_NAME}" \
+   --name "${SECRET_NAME}" \
+   --value "${SECRET_VALUE}"
+
+  # create a user-assigned managed identity
+  az identity create --name "${USER_ASSIGNED_IDENTITY_NAME}" --resource-group "${RESOURCE_GROUP}"
+
+  # Set access policy for the user-assigned managed identity to access the keyvault secret
+  export USER_ASSIGNED_IDENTITY_CLIENT_ID="$(az identity show --name "${USER_ASSIGNED_IDENTITY_NAME}" --resource-group "${RESOURCE_GROUP}" --query 'clientId' -otsv)"
+  export USER_ASSIGNED_IDENTITY_OBJECT_ID="$(az identity show --name "${USER_ASSIGNED_IDENTITY_NAME}" --resource-group "${RESOURCE_GROUP}" --query 'principalId' -otsv)"
+  az keyvault set-policy --name "${KEYVAULT_NAME}" \
+    --secret-permissions get \
+    --object-id "${USER_ASSIGNED_IDENTITY_OBJECT_ID}"
+
+  oc annotate sa default --namespace default azure.workload.identity/client-id="${USER_ASSIGNED_IDENTITY_CLIENT_ID}" --overwrite
+
+  # Create the federated identity credential (FIC) for the managed identity
+  echo "Creating federated identity credential for default:default"
+  az identity federated-credential create --name "kubernetes-federated-credential-default" \
+    --identity-name "${USER_ASSIGNED_IDENTITY_NAME}" \
+    --resource-group "${RESOURCE_GROUP}" \
+    --issuer "${OIDC_PROVIDER}" \
+    --subject "system:serviceaccount:default:default" \
+    --audiences "api://AzureADTokenExchange" > /dev/null
+
+  echo "Creating federated identity credential for test-ns:default"
+  az identity federated-credential create --name "kubernetes-federated-credential-test-ns" \
+    --identity-name "${USER_ASSIGNED_IDENTITY_NAME}" \
+    --resource-group "${RESOURCE_GROUP}" \
+    --issuer "${OIDC_PROVIDER}" \
+    --subject "system:serviceaccount:test-ns:default" \
+    --audiences "api://AzureADTokenExchange" > /dev/null
+
+
+  echo "Creating federated identity credential for negative-test-ns:default"
+  az identity federated-credential create --name "kubernetes-federated-credential-negative-test-ns" \
+    --identity-name "${USER_ASSIGNED_IDENTITY_NAME}" \
+    --resource-group "${RESOURCE_GROUP}" \
+    --issuer "${OIDC_PROVIDER}" \
+    --subject "system:serviceaccount:negative-test-ns:default" \
+    --audiences "api://AzureADTokenExchange" > /dev/null
+}
+
 setup() {
-  if [[ -z "${IDENTITY_CLIENT_ID}" ]]; then
+  if [[ -z "${USER_ASSIGNED_IDENTITY_CLIENT_ID}" ]]; then
     echo "Error: Azure managed identity id is not provided" >&2
     return 1
   fi
@@ -44,6 +107,7 @@ setup() {
         --set "windows.enabled=$TEST_WINDOWS" \
         --set "logVerbosity=5" \
         --set "logFormatJSON=true" \
+        --set "azureWorkloadIdentity.enabled=true"
 
   # wait for azure-csi-provider pod to be running
   kubectl wait --for=condition=Ready --timeout=150s pods -l app=csi-secrets-store-provider-azure --namespace $PROVIDER_NAMESPACE
