@@ -17,8 +17,8 @@ Join us to help define the direction and implementation of this project!
 
 | Driver                                                                                    | Compatible Kubernetes | `secrets-store.csi.x-k8s.io` Versions |
 | ----------------------------------------------------------------------------------------- | --------------------- | ------------------------------------- |
-| [v1.3.0](https://github.com/kubernetes-sigs/secrets-store-csi-driver/releases/tag/v1.3.0) | 1.19+                 | `v1`, `v1alpha1 [DEPRECATED]`         |
-| [v1.2.4](https://github.com/kubernetes-sigs/secrets-store-csi-driver/releases/tag/v1.2.4) | 1.19+                 | `v1`, `v1alpha1 [DEPRECATED]`         |
+| [v1.4.0](https://github.com/kubernetes-sigs/secrets-store-csi-driver/releases/tag/v1.4.0) | 1.19+                 | `v1`, `v1alpha1 [DEPRECATED]`         |
+| [v1.3.4](https://github.com/kubernetes-sigs/secrets-store-csi-driver/releases/tag/v1.3.4) | 1.19+                 | `v1`, `v1alpha1 [DEPRECATED]`         |
 
 See
 [Release Management](./release-management.md)
@@ -45,7 +45,9 @@ These features are not stable. If you use these be sure to consult the
 
 ## Supported Providers
 
+- [Akeyless Provider](https://github.com/akeylesslabs/akeyless-csi-provider)
 - [AWS Provider](https://github.com/aws/secrets-store-csi-driver-provider-aws)
 - [Azure Provider](https://azure.github.io/secrets-store-csi-driver-provider-azure/)
+- [Conjur Provider](https://github.com/cyberark/conjur-k8s-csi-provider)
 - [GCP Provider](https://github.com/GoogleCloudPlatform/secrets-store-csi-driver-provider-gcp)
 - [Vault Provider](https://github.com/hashicorp/secrets-store-csi-driver-provider-vault)

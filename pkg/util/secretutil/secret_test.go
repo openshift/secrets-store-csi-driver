@@ -101,6 +101,7 @@ koN/frqYab5Ek3kauj1iqW7rPkrFCqT2evh0YRqb1bFsCLJrRNxnOZ5wKXV/OYQa
 QX5t0wFGCZ0KlbXDiw==
 -----END CERTIFICATE-----
 `
+	//nolint:gosec // This is a test key for unit tests
 	keyPEM = `-----BEGIN RSA PRIVATE KEY-----
 MIIEpAIBAAKCAQEAyS3Zky3n8JlLBxPLzgUpKZYxvzRadeWLmWVbK9byo08S0Ss8
 Jao7Ay1wHtnLbn52rzCX6IX1sAe1TAT755Gk7JtLMkshtj6F8BNeelEyE1gsBE5n
@@ -410,6 +411,16 @@ func TestGenerateSHAFromSecret(t *testing.T) {
 			data1:            map[string][]byte{"key1": []byte("value1"), "key2": []byte("value2")},
 			data2:            map[string][]byte{"key2": []byte("value2"), "key1": []byte("value1")},
 			expectedSHAMatch: true,
+		},
+		{
+			name: "different keys with the same concatenated result but should not match",
+			data1: map[string][]byte{
+				"key1": []byte("=value1"),
+			},
+			data2: map[string][]byte{
+				"key1=": []byte("value1"),
+			},
+			expectedSHAMatch: false,
 		},
 	}
 
