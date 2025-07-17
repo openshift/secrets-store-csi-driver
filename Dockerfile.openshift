@@ -7,7 +7,6 @@ RUN go version -m _output/secrets-store-csi
 
 FROM registry.ci.openshift.org/ocp/4.20:base-rhel9
 COPY --from=builder /go/src/github.com/openshift/secrets-store-csi-driver/_output/secrets-store-csi /bin/secrets-store-csi
-RUN yum install -y util-linux ca-certificates && yum clean all && rm -rf /var/cache/yum
 
 LABEL description="Secrets Store CSI Driver"
 
