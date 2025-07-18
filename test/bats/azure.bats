@@ -17,16 +17,77 @@ if [ $TEST_WINDOWS ]; then
   NODE_SELECTOR_OS=windows
 fi
 
-export KEYVAULT_NAME=${KEYVAULT_NAME:-secrets-store-csi-e2e}
+# key-vault configuration
+export KEYVAULT_NAME=${KEYVAULT_NAME:-sscsi-e2e-vault-$(openssl rand -hex 2)}
 export SECRET_NAME=${KEYVAULT_SECRET_NAME:-secret1}
 export SECRET_VERSION=${KEYVAULT_SECRET_VERSION:-""}
 export SECRET_VALUE=${KEYVAULT_SECRET_VALUE:-"test"}
+
+export RESOURCE_GROUP=$(oc get infrastructure cluster -o=jsonpath='{.status.platformStatus.azure.resourceGroupName}')
+export LOCATION=$(az group show --name $RESOURCE_GROUP --query location --output tsv)
+
+
+export OIDC_PROVIDER=$(oc get authentication.config.openshift.io cluster -o jsonpath='{.spec.serviceAccountIssuer}')
+export AZURE_TENANT_ID=$(az account get-access-token --query tenant --output tsv)
+
 export LABEL_VALUE=${LABEL_VALUE:-"test"}
 export NODE_SELECTOR_OS=$NODE_SELECTOR_OS
 
 # export the secrets-store API version to be used
 # TODO (aramase) remove this once the upgrade tests are moved to use e2e-provider
 export API_VERSION=$(get_secrets_store_api_version)
+
+
+setup_file(){
+  export USER_ASSIGNED_IDENTITY_NAME="sscsi-e2e-uami-$(openssl rand -hex 2)"
+
+  echo "Create Key Vault"
+  az keyvault create --resource-group "${RESOURCE_GROUP}" \
+   --location "${LOCATION}" \
+   --name "${KEYVAULT_NAME}" \
+   --enable-rbac-authorization false
+
+  echo "Add secret in Key Vault"
+  az keyvault secret set --vault-name "${KEYVAULT_NAME}" \
+   --name "${SECRET_NAME}" \
+   --value "${SECRET_VALUE}"
+
+  echo "Create a user-assigned managed identity"
+  az identity create --name "${USER_ASSIGNED_IDENTITY_NAME}" --resource-group "${RESOURCE_GROUP}"
+
+  export IDENTITY_CLIENT_ID="$(az identity show --name "${USER_ASSIGNED_IDENTITY_NAME}" --resource-group "${RESOURCE_GROUP}" --query 'clientId' -otsv)"
+
+  echo "Creating federated identity credential for default:default"
+  az identity federated-credential create --name "kubernetes-federated-credential-default" \
+    --identity-name "${USER_ASSIGNED_IDENTITY_NAME}" \
+    --resource-group "${RESOURCE_GROUP}" \
+    --issuer "${OIDC_PROVIDER}" \
+    --subject "system:serviceaccount:default:default" \
+    --audiences "api://AzureADTokenExchange" > /dev/null
+
+  echo "Creating federated identity credential for test-ns:default"
+  az identity federated-credential create --name "kubernetes-federated-credential-test-ns" \
+    --identity-name "${USER_ASSIGNED_IDENTITY_NAME}" \
+    --resource-group "${RESOURCE_GROUP}" \
+    --issuer "${OIDC_PROVIDER}" \
+    --subject "system:serviceaccount:test-ns:default" \
+    --audiences "api://AzureADTokenExchange" > /dev/null
+
+
+  echo "Creating federated identity credential for negative-test-ns:default"
+  az identity federated-credential create --name "kubernetes-federated-credential-negative-test-ns" \
+    --identity-name "${USER_ASSIGNED_IDENTITY_NAME}" \
+    --resource-group "${RESOURCE_GROUP}" \
+    --issuer "${OIDC_PROVIDER}" \
+    --subject "system:serviceaccount:negative-test-ns:default" \
+    --audiences "api://AzureADTokenExchange" > /dev/null
+
+  echo "Set access policy for the user-assigned managed identity to access the keyvault secret"
+  export USER_ASSIGNED_IDENTITY_OBJECT_ID="$(az identity show --name "${USER_ASSIGNED_IDENTITY_NAME}" --resource-group "${RESOURCE_GROUP}" --query 'principalId' -otsv)"
+  az keyvault set-policy --name "${KEYVAULT_NAME}" \
+    --secret-permissions get \
+    --object-id "${USER_ASSIGNED_IDENTITY_OBJECT_ID}"
+}
 
 setup() {
   if [[ -z "${IDENTITY_CLIENT_ID}" ]]; then
@@ -57,6 +118,7 @@ setup() {
 }
 
 @test "CSI inline volume test with pod portability" {
+  # default namespace already have the privileged labels (security.openshift.io/scc.podSecurityLabelSync=false, pod-security.kubernetes.io/enforce=privileged, pod-security.kubernetes.io/audit=privileged, pod-security.kubernetes.io/warn=privileged)
   envsubst < $BATS_TESTS_DIR/pod-secrets-store-inline-volume-crd.yaml | kubectl apply -n $NAMESPACE -f -
   
   # The wait timeout is set to 300s only for this first pod in test to accomadate for the node-driver-registrar
@@ -149,6 +211,9 @@ setup() {
 
 @test "Test Namespaced scope SecretProviderClass - create deployment" {
   run kubectl create ns test-ns
+  # Configure namespace for privileged pod security - CSI driver needs root access for mount operations and tmpfs filesystem creation
+  run kubectl label ns test-ns security.openshift.io/scc.podSecurityLabelSync=false pod-security.kubernetes.io/enforce=privileged pod-security.kubernetes.io/audit=privileged pod-security.kubernetes.io/warn=privileged --overwrite
+
   assert_success
 
   envsubst < $BATS_TESTS_DIR/azure_v1_secretproviderclass_ns.yaml | kubectl apply -f -
@@ -190,6 +255,9 @@ setup() {
 
 @test "Test Namespaced scope SecretProviderClass - Should fail when no secret provider class in same namespace" {
   run kubectl create ns negative-test-ns
+  # Configure namespace for privileged pod security - CSI driver needs root access for mount operations and tmpfs filesystem creation
+  run kubectl label ns negative-test-ns security.openshift.io/scc.podSecurityLabelSync=false pod-security.kubernetes.io/enforce=privileged pod-security.kubernetes.io/audit=privileged pod-security.kubernetes.io/warn=privileged --overwrite
+
   assert_success
 
   envsubst < $BATS_TESTS_DIR/deployment-synck8s-azure.yaml | kubectl apply -n negative-test-ns -f -
@@ -258,4 +326,11 @@ teardown_file() {
   #cleanup
   run kubectl delete namespace test-ns
   run kubectl delete pods secrets-store-inline-crd secrets-store-inline-multiple-crd --force --grace-period 0
+
+  echo "Delete Azure Key Vault"
+  az keyvault delete --name "${KEYVAULT_NAME}" --resource-group "${RESOURCE_GROUP}" --no-wait || true
+  az keyvault purge --name "${KEYVAULT_NAME}" --no-wait || true
+
+  echo "Delete User-Assigned Managed Identity"
+  az identity delete --name "${USER_ASSIGNED_IDENTITY_NAME}" --resource-group "${RESOURCE_GROUP}" || true
 }
