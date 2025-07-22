@@ -34,5 +34,14 @@ COPY --from=builder /go/src/github.com/openshift/secrets-store-csi-driver/google
 RUN ln -s /usr/local/google-cloud-sdk/bin/gcloud /usr/local/bin/gcloud
 RUN gcloud version
 
+# Install Azure CLI
+RUN rpm --import https://packages.microsoft.com/keys/microsoft.asc && \
+    dnf install -y https://packages.microsoft.com/config/rhel/9/packages-microsoft-prod.rpm && \
+    mv /etc/yum.repos.d/microsoft-prod.repo /etc/yum.repos.art/ci/ && \
+    dnf install -y azure-cli && \
+    dnf clean all
+
+RUN az --version
+
 # Install envsubst and less
 RUN dnf install -y gettext less && dnf clean all
