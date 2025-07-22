@@ -472,7 +472,7 @@ e2e-provider:
 	bats -t -T test/bats/e2e-provider.bats
 
 .PHONY: e2e-azure
-e2e-azure: $(AZURE_CLI)
+e2e-azure:
 	bats -t test/bats/azure.bats
 
 .PHONY: e2e-vault
