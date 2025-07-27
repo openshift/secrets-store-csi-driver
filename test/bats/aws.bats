@@ -143,6 +143,7 @@ teardown_file() {
   helm install csi aws-secrets-manager/secrets-store-csi-driver-provider-aws \
     -n $CSI_DRIVER_INSTALLED_NAMESPACE \
     --set "logVerbosity=5" \
+    --set "secrets-store-csi-driver.install=false" \
     --set-json tolerations='[{"operator":"Exists"}]' \
     --set-json securityContext='{"privileged":true,"allowPrivilegeEscalation":null}'
 
