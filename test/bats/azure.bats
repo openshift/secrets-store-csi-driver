@@ -24,11 +24,7 @@ export SECRET_VERSION=${KEYVAULT_SECRET_VERSION:-""}
 export SECRET_VALUE=${KEYVAULT_SECRET_VALUE:-"test"}
 
 export RESOURCE_GROUP=$(oc get infrastructure cluster -o=jsonpath='{.status.platformStatus.azure.resourceGroupName}')
-export LOCATION=$(az group show --name $RESOURCE_GROUP --query location --output tsv)
-
-
 export OIDC_PROVIDER=$(oc get authentication.config.openshift.io cluster -o jsonpath='{.spec.serviceAccountIssuer}')
-export AZURE_TENANT_ID=$(az account get-access-token --query tenant --output tsv)
 
 export LABEL_VALUE=${LABEL_VALUE:-"test"}
 export NODE_SELECTOR_OS=$NODE_SELECTOR_OS
@@ -39,6 +35,26 @@ export API_VERSION=$(get_secrets_store_api_version)
 
 
 setup_file(){
+  if [[ -z "${AZURE_AUTH_CLIENT_ID}" ]]; then
+    echo "Error: Azure client id is not provided" >&2
+    return 1
+  fi
+
+  if [[ -z "${AZURE_AUTH_CLIENT_SECRET}" ]]; then
+    echo "Error: Azure client secret is not provided" >&2
+    return 1
+  fi
+
+  if [[ -z "${AZURE_TENANT_ID}" ]]; then
+    echo "Error: Azure tenant id is not provided" >&2
+    return 1
+  fi
+
+  echo "Azure Login"
+  az login --service-principal -u "${AZURE_AUTH_CLIENT_ID}" -p "${AZURE_AUTH_CLIENT_SECRET}" --tenant "${AZURE_TENANT_ID}"
+
+  export LOCATION=$(az group show --name $RESOURCE_GROUP --query location --output tsv)
+
   export USER_ASSIGNED_IDENTITY_NAME="sscsi-e2e-uami-$(openssl rand -hex 2)"
 
   echo "Create Key Vault"
