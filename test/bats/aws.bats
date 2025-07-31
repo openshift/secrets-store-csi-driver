@@ -51,7 +51,7 @@ setup_file() {
   run kubectl create ns $NAMESPACE
   assert_success 
 
-  run kubectl label ns $NAMESPACE security.openshift.io/scc.podSecurityLabelSync=false pod-security.kubernetes.io/enforce=privileged pod-security.kubernetes.io/audit=privileged pod-security.kubernetes.io/warn=privileged --overwrite
+  run kubectl label ns $NAMESPACE security.openshift.io/scc.podSecurityLabelSync=false pod-security.kubernetes.io/enforce=restricted pod-security.kubernetes.io/audit=baseline pod-security.kubernetes.io/warn=baseline --overwrite
   assert_success
 
   cat > $BATS_TEST_DIR/csi-app-assume-role-policy-document.json <<EOF
