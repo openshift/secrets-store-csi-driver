@@ -4,7 +4,7 @@ metadata:
   name: secrets-store-rotation
 spec:
   containers:
-    - image: registry.k8s.io/e2e-test-images/busybox:1.29-4
+    - image: s390x/busybox
       name: busybox
       imagePullPolicy: IfNotPresent
       command:

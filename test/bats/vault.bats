@@ -14,24 +14,33 @@ export ANNOTATION_VALUE=${ANNOTATION_VALUE:-"app=test"}
 
   oc delete project vault --ignore-not-found=true
   kubectl create ns vault
+  oc adm policy add-scc-to-user privileged -z vault-agent-injector -n vault
   kubectl label ns vault security.openshift.io/scc.podSecurityLabelSync=false pod-security.kubernetes.io/enforce=privileged pod-security.kubernetes.io/audit=privileged pod-security.kubernetes.io/warn=privileged --overwrite
   oc adm policy add-scc-to-user privileged system:serviceaccount:vault:vault
   oc adm policy add-scc-to-user privileged system:serviceaccount:vault:vault-csi-provider
-
+  oc apply -f /root/secret_store/secrets-store-csi-driver/vault-license.yaml
   # install the vault provider using the helm charts
   # pinning this to a fixed version (1.7.0)
   helm repo add hashicorp https://helm.releases.hashicorp.com
   helm repo update
-  helm install vault hashicorp/vault --namespace=vault \
-        --set "server.dev.enabled=true" \
-        --set "injector.enabled=false" \
-        --set "csi.enabled=true" \
-        --set "global.openshift=true" \
-        --set "injector.agentImage.repository=docker.io/hashicorp/vault" \
-        --set "server.image.repository=docker.io/hashicorp/vault" \
-        --set "csi.image.repository=docker.io/hashicorp/vault-csi-provider" \
-        --set "csi.agent.image.repository=docker.io/hashicorp/vault" \
-        --set "csi.daemonSet.providersDir=/var/run/secrets-store-csi-providers"
+  helm install vault hashicorp/vault \
+  	--namespace vault \
+  	--create-namespace \
+  	--set server.dev.enabled=true \
+  	--set server.image.repository="quay.io/ssanidhy/vault-enterprise" \
+  	--set server.image.tag="1.20.4-ent-ubi" \
+	--set server.enterpriseLicense.secretName="vault-license"\
+  	--set server.logLevel=debug \
+  	--set server.serviceAccount.name="vault" \
+  	--set "injector.enabled=false" \
+  	--set global.openshift=true \
+  	--set csi.enabled=true \
+	--set "csi.daemonSet.providersDir=/var/run/secrets-store-csi-providers"\
+  	--set csi.image.repository="quay.io/ssanidhy/vault-csi-provider" \
+  	--set csi.image.tag="1.6.0-6-g9f62ddc-ubi" \
+  	--set csi.agent.enabled=false \
+ 	--set csi.agent.image.repository="quay.io/ssanidhy/vault-enterprise" \
+  	--set csi.agent.image.tag="1.20.4-ent-ubi"
   oc patch daemonset -n vault vault-csi-provider --type='json' -p='[{"op": "add", "path": "/spec/template/spec/containers/0/securityContext", "value": {"privileged": true} }]'
   sleep 10 
 
