@@ -32,9 +32,23 @@ get_random_region() {
 }
 
 cleanup() {
-    echo "Deleting the AKS cluster ${CLUSTER_NAME}"
+    echo "Cleaning up resources"
     az login --service-principal -u "${AZURE_CLIENT_ID}" --t "${AZURE_TENANT_ID}" --federated-token "$(cat "${AZURE_FEDERATED_TOKEN_FILE}")" > /dev/null
     az account set --subscription "${AZURE_SUBSCRIPTION_ID}" > /dev/null
+
+    # Clean up role assignment if IDENTITY_OBJECT_ID is set
+    if [[ -n "${IDENTITY_OBJECT_ID:-}" ]]; then
+        echo "Removing role assignment from Key Vault"
+        KEYVAULT_RESOURCE_ID=$(az keyvault show --name "${KEYVAULT_NAME}" --query "id" -otsv 2>/dev/null || true)
+        if [[ -n "${KEYVAULT_RESOURCE_ID}" ]]; then
+            az role assignment delete \
+                --role "Key Vault Secrets User" \
+                --assignee "${IDENTITY_OBJECT_ID}" \
+                --scope "${KEYVAULT_RESOURCE_ID}" > /dev/null 2>&1 || true
+        fi
+    fi
+
+    echo "Deleting the AKS cluster ${CLUSTER_NAME}"
     az group delete --name "${CLUSTER_NAME}" --yes --no-wait || true
 }
 trap cleanup EXIT
@@ -63,13 +77,14 @@ main() {
     # only add windows pool if TEST_WINDOWS is set and equal to true
     if [[ "${TEST_WINDOWS:-}" == "true" ]]; then
         echo "Adding windows nodepool"
-        # add windows nodepool
+        # add windows nodepool with explicit x64 VM size (Windows doesn't support ARM64)
         az aks nodepool add \
             --resource-group "${CLUSTER_NAME}" \
             --cluster-name "${CLUSTER_NAME}" \
             --os-type Windows \
             --name npwin \
-            --node-count 1 > /dev/null
+            --node-count 1 \
+            --node-vm-size Standard_D2s_v3 > /dev/null
     fi
 
     az aks get-credentials --resource-group "${CLUSTER_NAME}" --name "${CLUSTER_NAME}" --overwrite-existing
@@ -116,9 +131,16 @@ main() {
         --subject "system:serviceaccount:negative-test-ns:default" \
         --audiences api://AzureADTokenExchange > /dev/null
 
-    # Assigning the managed identity the necessary permissions to access the keyvault
-    echo "Assigning managed identity permissions to get secrets from keyvault"
-    az keyvault set-policy --name "${KEYVAULT_NAME}" --secret-permissions get --object-id "${IDENTITY_OBJECT_ID}" > /dev/null
+    # Assigning the managed identity the necessary permissions to access the keyvault using RBAC
+    echo "Assigning managed identity Key Vault Secrets User role on keyvault"
+    KEYVAULT_RESOURCE_ID=$(az keyvault show --name "${KEYVAULT_NAME}" --query "id" -otsv)
+    # Use --assignee-principal-type to avoid replication delay issues
+    # See: https://learn.microsoft.com/en-us/azure/role-based-access-control/troubleshooting#symptom---assigning-a-role-to-a-new-principal-sometimes-fails
+    az role assignment create \
+        --role "Key Vault Secrets User" \
+        --assignee-object-id "${IDENTITY_OBJECT_ID}" \
+        --assignee-principal-type ServicePrincipal \
+        --scope "${KEYVAULT_RESOURCE_ID}" > /dev/null
 
     docker pull "${IMAGE_TAG}" || ALL_ARCH_linux=amd64 make container-all push-manifest
     make e2e-install-prerequisites
