@@ -18,7 +18,7 @@ export ANNOTATION_VALUE=${ANNOTATION_VALUE:-"app=test"}
   kubectl label ns vault security.openshift.io/scc.podSecurityLabelSync=false pod-security.kubernetes.io/enforce=privileged pod-security.kubernetes.io/audit=privileged pod-security.kubernetes.io/warn=privileged --overwrite
   oc adm policy add-scc-to-user privileged system:serviceaccount:vault:vault
   oc adm policy add-scc-to-user privileged system:serviceaccount:vault:vault-csi-provider
-  oc apply -f /root/secret_store/secrets-store-csi-driver/vault-license.yaml
+  # oc apply -f /root/secret_store/secrets-store-csi-driver/vault-license.yaml
   # install the vault provider using the helm charts
   # pinning this to a fixed version (1.7.0)
   helm repo add hashicorp https://helm.releases.hashicorp.com
