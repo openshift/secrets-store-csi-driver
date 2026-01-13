@@ -1,16 +1,16 @@
 linux:
   enabled: true
   image:
-    repository: registry.k8s.io/csi-secrets-store/driver
-    tag: v1.5.4
-    #digest: sha256:
+    repository: registry.redhat.io/openshift4/ose-secrets-store-csi-driver-rhel9
+    digest: sha256:504c3d8ed62cc959df2d40f74e181ab16ac45cdc3ea0a57bb1b8ec438b82fea8
+      #tag: v1.5.4
     pullPolicy: IfNotPresent
 
   crds:
     enabled: true
     image:
-      repository: registry.k8s.io/csi-secrets-store/driver-crds
-      tag: v1.5.4
+      repository: registry.redhat.io/openshift4/ose-secrets-store-csi-driver-rhel9
+      digest: sha256:504c3d8ed62cc959df2d40f74e181ab16ac45cdc3ea0a57bb1b8ec438b82fea8
       pullPolicy: IfNotPresent
     ## Optionally override resource limits for crd hooks(jobs)
     resources: {}
@@ -44,8 +44,8 @@ linux:
         memory: 100Mi
 
   registrarImage:
-    repository: registry.k8s.io/sig-storage/csi-node-driver-registrar
-    tag: v2.13.0
+    repository: registry.redhat.io/openshift4/ose-csi-node-driver-registrar-rhel9
+    digest: sha256:2d216c42913c0e8df83ad80f1a4b914fc8ca2f9cf1ba980f629f8d88813d89b4
     #digest: sha256:
     pullPolicy: IfNotPresent
 
@@ -60,9 +60,9 @@ linux:
     logVerbosity: 5
 
   livenessProbeImage:
-    repository: registry.k8s.io/sig-storage/livenessprobe
-    tag: v2.15.0
-    #digest: sha256:
+    repository: registry.redhat.io/openshift4/ose-csi-livenessprobe-rhel9
+      #tag: v2.15.0
+    digest: sha256:eaa37757e64656c892aa8efdd51aaeff4545e74a814a9fa11faeddc7534145be
     pullPolicy: IfNotPresent
 
   livenessProbe:
@@ -135,9 +135,9 @@ windows:
         memory: 100Mi
 
   registrarImage:
-    repository: registry.k8s.io/sig-storage/csi-node-driver-registrar
-    tag: v2.13.0
-    #digest: sha256:
+    repository: registry.redhat.io/openshift4/ose-csi-node-driver-registrar-rhel9
+      #tag: v2.13.0
+    digest: sha256:2d216c42913c0e8df83ad80f1a4b914fc8ca2f9cf1ba980f629f8d88813d89b4
     pullPolicy: IfNotPresent
 
   registrar:
@@ -151,9 +151,9 @@ windows:
     logVerbosity: 5
 
   livenessProbeImage:
-    repository: registry.k8s.io/sig-storage/livenessprobe
-    tag: v2.15.0
-    #digest: sha256:
+    repository: registry.redhat.io/openshift4/ose-csi-livenessprobe-rhel9
+      #tag: v2.15.0
+    digest: sha256:eaa37757e64656c892aa8efdd51aaeff4545e74a814a9fa11faeddc7534145be
     pullPolicy: IfNotPresent
 
   livenessProbe:
