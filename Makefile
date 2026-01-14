@@ -100,13 +100,13 @@ YQ := yq
 
 # Test variables
 KIND_VERSION ?= 0.27.0
-KUBERNETES_VERSION ?= 1.30.2
-KUBECTL_VERSION ?= 1.30.2
+KUBERNETES_VERSION ?= 1.35.0
+KUBECTL_VERSION ?= 1.35.0
 BATS_VERSION ?= 1.4.1
 TRIVY_VERSION ?= 0.57.1
-PROTOC_VERSION ?= 3.20.1
+PROTOC_VERSION ?= 33.4
 SHELLCHECK_VER ?= v0.8.0
-YQ_VERSION ?= v4.11.2
+YQ_VERSION ?= v4.49.2
 
 # For aws integration tests
 BUILD_TIMESTAMP_W_SEC := $(shell date +%Y-%m-%d-%H-%M-%S)
@@ -204,7 +204,7 @@ $(EKSCTL): ## Download and install eksctl
 	curl -sSLO  https://github.com/weaveworks/eksctl/releases/latest/download/eksctl_Linux_amd64.tar.gz && tar -zxvf eksctl_Linux_amd64.tar.gz && chmod +x eksctl && mv eksctl /usr/local/bin/
 
 $(KUBECTL): ## Install kubectl
-	curl -LO https://dl.k8s.io/release/v$(KUBECTL_VERSION)/bin/linux/amd64/kubectl && chmod +x ./kubectl && mv kubectl /usr/local/bin/
+	curl -LO https://dl.k8s.io/release/v$(KUBECTL_VERSION)/bin/linux/s390x/kubectl && chmod +x ./kubectl && mv kubectl /usr/local/bin/
 
 $(TRIVY): ## Install trivy for image vulnerability scan
 	trivy -v | grep -q $(TRIVY_VERSION) || (curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin v$(TRIVY_VERSION))
@@ -216,10 +216,10 @@ $(ENVSUBST): ## Install envsubst for running the tests
 	envsubst -V || (apt-get -o Acquire::Retries=30 update && apt-get -o Acquire::Retries=30 install gettext-base -y)
 
 $(PROTOC): ## Install protoc
-	curl -sSLO https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-linux-x86_64.zip && unzip protoc-${PROTOC_VERSION}-linux-x86_64.zip bin/protoc -d $(TOOLS_DIR) && rm protoc-${PROTOC_VERSION}-linux-x86_64.zip
+	curl -sSLO https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-linux-s390_64.zip && unzip protoc-${PROTOC_VERSION}-linux-s390_64.zip bin/protoc -d $(TOOLS_DIR) && rm protoc-${PROTOC_VERSION}-linux-s390_64.zip
 
 $(YQ): ## Install yq for running the tests
-	curl -LO https://github.com/mikefarah/yq/releases/download/$(YQ_VERSION)/yq_linux_amd64 && chmod +x ./yq_linux_amd64 && mv yq_linux_amd64 /usr/local/bin/yq
+	curl -LO https://github.com/mikefarah/yq/releases/download/$(YQ_VERSION)/yq_linux_s390x && chmod +x ./yq_linux_s390x && mv yq_linux_s390x /usr/local/bin/yq
 
 SHELLCHECK := $(TOOLS_BIN_DIR)/shellcheck-$(SHELLCHECK_VER)
 $(SHELLCHECK): OS := $(shell uname | tr '[:upper:]' '[:lower:]')
