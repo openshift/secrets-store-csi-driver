@@ -1,4 +1,5 @@
-FROM registry.ci.openshift.org/ocp/builder:rhel-9-golang-1.25-openshift-4.22 AS builder
+FROM registry.redhat.io/ubi10/go-toolset:10.1 AS builder
+USER 0
 WORKDIR /go/src/github.com/openshift/secrets-store-csi-driver
 COPY . .
 ENV BATS_VERSION="1.12.0"
