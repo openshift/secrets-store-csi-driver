@@ -6,8 +6,7 @@ RUN make build
 # Print build settings information embedded in the binary.
 RUN go version -m _output/secrets-store-csi
 
-FROM registry.redhat.io/ubi10:10.1
-RUN dnf install -y util-linux ca-certificates && dnf clean all
+FROM registry.access.redhat.com/ubi10/ubi-minimal:10.1
 COPY --from=builder /go/src/github.com/openshift/secrets-store-csi-driver/_output/secrets-store-csi /bin/secrets-store-csi
 
 LABEL description="Secrets Store CSI Driver"

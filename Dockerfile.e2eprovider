@@ -4,7 +4,7 @@ WORKDIR /go/src/github.com/openshift/secrets-store-csi-driver
 COPY . .
 RUN make build-e2e-provider
 
-FROM registry.redhat.io/ubi10:10.1
+FROM registry.access.redhat.com/ubi10/ubi-minimal:10.1
 COPY --from=builder /go/src/github.com/openshift/secrets-store-csi-driver/test/e2eprovider/e2e-provider /e2e-provider
 
 LABEL description="Mock provider for Secrets Store CSI Driver"
