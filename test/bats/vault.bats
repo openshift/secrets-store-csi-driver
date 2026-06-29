@@ -12,7 +12,7 @@ export ANNOTATION_VALUE=${ANNOTATION_VALUE:-"app=test"}
 @test "install vault provider" {
   # create the ns vault
 
-  oc delete project vault --ignore-not-found=true
+  oc delete ns vault --ignore-not-found=true
   kubectl create ns vault
   kubectl label ns vault security.openshift.io/scc.podSecurityLabelSync=false pod-security.kubernetes.io/enforce=privileged pod-security.kubernetes.io/audit=privileged pod-security.kubernetes.io/warn=privileged --overwrite
   oc adm policy add-scc-to-user privileged system:serviceaccount:vault:vault
@@ -212,7 +212,7 @@ EOF
 }
 
 @test "Test Namespaced scope SecretProviderClass - create deployment" {
-  oc delete project test-ns --ignore-not-found=true
+  oc delete ns test-ns --ignore-not-found=true
   kubectl create ns test-ns
   kubectl label ns test-ns security.openshift.io/scc.podSecurityLabelSync=false pod-security.kubernetes.io/enforce=privileged pod-security.kubernetes.io/audit=privileged pod-security.kubernetes.io/warn=privileged --overwrite
 
@@ -257,7 +257,7 @@ EOF
 }
 
 @test "Test Namespaced scope SecretProviderClass - Should fail when no secret provider class in same namespace" {
-  oc delete project negative-test-ns --ignore-not-found=true
+  oc delete ns negative-test-ns --ignore-not-found=true
   kubectl create ns negative-test-ns
   kubectl label ns negative-test-ns security.openshift.io/scc.podSecurityLabelSync=false pod-security.kubernetes.io/enforce=privileged pod-security.kubernetes.io/audit=privileged pod-security.kubernetes.io/warn=privileged --overwrite
 
