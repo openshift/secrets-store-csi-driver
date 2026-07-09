@@ -24,7 +24,6 @@ import (
 	"time"
 
 	secretsstorev1 "sigs.k8s.io/secrets-store-csi-driver/apis/v1"
-	"sigs.k8s.io/secrets-store-csi-driver/pkg/k8s"
 	"sigs.k8s.io/secrets-store-csi-driver/pkg/secrets-store/mocks"
 	providerfake "sigs.k8s.io/secrets-store-csi-driver/provider/fake"
 
@@ -33,14 +32,13 @@ import (
 	"google.golang.org/grpc/status"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	fakeclient "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/kubernetes/scheme"
 	mount "k8s.io/mount-utils"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
-func testNodeServer(t *testing.T, client client.Client, reporter StatsReporter) (*nodeServer, error) {
+func testNodeServer(t *testing.T, client client.Client, reporter StatsReporter, rotationConfig *rotationConfig) (*nodeServer, error) {
 	t.Helper()
 
 	// Create a mock provider named "provider1".
@@ -56,7 +54,7 @@ func testNodeServer(t *testing.T, client client.Client, reporter StatsReporter) 
 	t.Cleanup(server.Stop)
 
 	providerClients := NewPluginClientBuilder([]string{socketPath})
-	return newNodeServer("testnode", mount.NewFakeMounter([]mount.MountPoint{}), providerClients, client, client, reporter, k8s.NewTokenClient(fakeclient.NewSimpleClientset(), "test-driver", 1*time.Second))
+	return newNodeServer("testnode", mount.NewFakeMounter([]mount.MountPoint{}), providerClients, client, client, reporter, rotationConfig)
 }
 
 func TestNodePublishVolume_Errors(t *testing.T) {
@@ -111,7 +109,7 @@ func TestNodePublishVolume_Errors(t *testing.T) {
 				VolumeCapability: &csi.VolumeCapability{},
 				VolumeId:         "testvolid1",
 				TargetPath:       targetPath(t),
-				VolumeContext:    map[string]string{"secretProviderClass": "provider1", CSIPodName: "pod1", CSIPodNamespace: "default", CSIPodUID: "poduid1", "providerName": "provider1"},
+				VolumeContext:    map[string]string{"secretProviderClass": "provider1", csiPodName: "pod1", csiPodNamespace: "default", csiPodUID: "poduid1", "providerName": "provider1"},
 				Readonly:         true,
 			},
 			initObjects: []client.Object{
@@ -134,7 +132,7 @@ func TestNodePublishVolume_Errors(t *testing.T) {
 				VolumeCapability: &csi.VolumeCapability{},
 				VolumeId:         "testvolid1",
 				TargetPath:       targetPath(t),
-				VolumeContext:    map[string]string{"secretProviderClass": "provider1", CSIPodName: "pod1", CSIPodNamespace: "default"},
+				VolumeContext:    map[string]string{"secretProviderClass": "provider1", csiPodName: "pod1", csiPodNamespace: "default"},
 			},
 			initObjects: []client.Object{
 				&secretsstorev1.SecretProviderClass{
@@ -152,7 +150,7 @@ func TestNodePublishVolume_Errors(t *testing.T) {
 				VolumeCapability: &csi.VolumeCapability{},
 				VolumeId:         "testvolid1",
 				TargetPath:       targetPath(t),
-				VolumeContext:    map[string]string{"secretProviderClass": "provider1", CSIPodName: "pod1", CSIPodNamespace: "default"},
+				VolumeContext:    map[string]string{"secretProviderClass": "provider1", csiPodName: "pod1", csiPodNamespace: "default"},
 			},
 			initObjects: []client.Object{
 				&secretsstorev1.SecretProviderClass{
@@ -173,7 +171,7 @@ func TestNodePublishVolume_Errors(t *testing.T) {
 				VolumeCapability: &csi.VolumeCapability{},
 				VolumeId:         "testvolid1",
 				TargetPath:       targetPath(t),
-				VolumeContext:    map[string]string{"secretProviderClass": "provider1", CSIPodName: "pod1", CSIPodNamespace: "default"},
+				VolumeContext:    map[string]string{"secretProviderClass": "provider1", csiPodName: "pod1", csiPodNamespace: "default"},
 			},
 			initObjects: []client.Object{
 				&secretsstorev1.SecretProviderClass{
@@ -197,9 +195,9 @@ func TestNodePublishVolume_Errors(t *testing.T) {
 				TargetPath:       targetPath(t),
 				VolumeContext: map[string]string{
 					"secretProviderClass": "provider1",
-					CSIPodName:            "pod1",
-					CSIPodNamespace:       "default",
-					CSIPodUID:             "poduid1",
+					csiPodName:            "pod1",
+					csiPodNamespace:       "default",
+					csiPodUID:             "poduid1",
 				},
 				Readonly: true,
 			},
@@ -230,7 +228,7 @@ func TestNodePublishVolume_Errors(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			r := mocks.NewFakeReporter()
 
-			ns, err := testNodeServer(t, fake.NewClientBuilder().WithScheme(s).WithObjects(test.initObjects...).Build(), r)
+			ns, err := testNodeServer(t, fake.NewClientBuilder().WithScheme(s).WithObjects(test.initObjects...).Build(), r, &rotationConfig{})
 			if err != nil {
 				t.Fatalf("expected error to be nil, got: %+v", err)
 			}
@@ -270,6 +268,7 @@ func TestNodePublishVolume(t *testing.T) {
 		name              string
 		nodePublishVolReq *csi.NodePublishVolumeRequest
 		initObjects       []client.Object
+		rotationConfig    *rotationConfig
 	}{
 		{
 			name: "volume mount",
@@ -279,9 +278,9 @@ func TestNodePublishVolume(t *testing.T) {
 				TargetPath:       targetPath(t),
 				VolumeContext: map[string]string{
 					"secretProviderClass": "provider1",
-					CSIPodName:            "pod1",
-					CSIPodNamespace:       "default",
-					CSIPodUID:             "poduid1",
+					csiPodName:            "pod1",
+					csiPodNamespace:       "default",
+					csiPodUID:             "poduid1",
 				},
 				Readonly: true,
 			},
@@ -297,20 +296,24 @@ func TestNodePublishVolume(t *testing.T) {
 					},
 				},
 			},
+			rotationConfig: &rotationConfig{
+				enabled:               false,
+				rotationCacheDuration: time.Minute,
+			},
 		},
 		{
-			name: "volume mount with refresh token",
+			name: "volume mount with refresh token ",
 			nodePublishVolReq: &csi.NodePublishVolumeRequest{
 				VolumeCapability: &csi.VolumeCapability{},
 				VolumeId:         "testvolid1",
 				TargetPath:       targetPath(t),
 				VolumeContext: map[string]string{
 					"secretProviderClass": "provider1",
-					CSIPodName:            "pod1",
-					CSIPodNamespace:       "default",
-					CSIPodUID:             "poduid1",
+					csiPodName:            "pod1",
+					csiPodNamespace:       "default",
+					csiPodUID:             "poduid1",
 					// not a real token, just for testing
-					CSIPodServiceAccountTokens: `{"https://kubernetes.default.svc":{"token":"eyJhbGciOiJSUzI1NiIsImtpZCI6IjEyMyJ9.eyJhdWQiOlsiaHR0cHM6Ly9rdWJlcm5ldGVzLmRlZmF1bHQuc3ZjIl0sImV4cCI6MTYxMTk1OTM5NiwiaWF0IjoxNjExOTU4Nzk2LCJpc3MiOiJodHRwczovL2t1YmVybmV0ZXMuZGVmYXVsdC5zdmMiLCJrdWJlcm5ldGVzLmlvIjp7Im5hbWVzcGFjZSI6ImRlZmF1bHQiLCJzZXJ2aWNlYWNjb3VudCI6eyJuYW1lIjoiZGVmYXVsdCIsInVpZCI6IjA5MWUyNTU3LWJkODYtNDhhMC1iZmNmLWI1YTI4ZjRjODAyNCJ9fSwibmJmIjoxNjExOTU4Nzk2LCJzdWIiOiJzeXN0ZW06c2VydmljZWFjY291bnQ6ZGVmYXVsdDpkZWZhdWx0In0.YNU2Z_gEE84DGCt8lh9GuE8gmoof-Pk_7emp3fsyj9pq16DRiDaLtOdprH-njpOYqvtT5Uf_QspFc_RwD_pdq9UJWCeLxFkRTsYR5WSjhMFcl767c4Cwp_oZPYhaHd1x7aU1emH-9oarrM__tr1hSmGoAc2I0gUSkAYFueaTUSy5e5d9QKDfjVljDRc7Yrp6qAAfd1OuDdk1XYIjrqTHk1T1oqGGlcd3lRM_dKSsW5I_YqgKMrjwNt8yOKcdKBrgQhgC42GZbFDRVJDJHs_Hq32xo-2s3PJ8UZ_alN4wv8EbuwB987_FHBTc_XAULHPvp0mCv2C5h0V2A7gzccv30A","expirationTimestamp":"2021-01-29T22:29:56Z"}}`,
+					csiPodServiceAccountTokens: `{"https://kubernetes.default.svc":{"token":"eyJhbGciOiJSUzI1NiIsImtpZCI6IjEyMyJ9.eyJhdWQiOlsiaHR0cHM6Ly9rdWJlcm5ldGVzLmRlZmF1bHQuc3ZjIl0sImV4cCI6MTYxMTk1OTM5NiwiaWF0IjoxNjExOTU4Nzk2LCJpc3MiOiJodHRwczovL2t1YmVybmV0ZXMuZGVmYXVsdC5zdmMiLCJrdWJlcm5ldGVzLmlvIjp7Im5hbWVzcGFjZSI6ImRlZmF1bHQiLCJzZXJ2aWNlYWNjb3VudCI6eyJuYW1lIjoiZGVmYXVsdCIsInVpZCI6IjA5MWUyNTU3LWJkODYtNDhhMC1iZmNmLWI1YTI4ZjRjODAyNCJ9fSwibmJmIjoxNjExOTU4Nzk2LCJzdWIiOiJzeXN0ZW06c2VydmljZWFjY291bnQ6ZGVmYXVsdDpkZWZhdWx0In0.YNU2Z_gEE84DGCt8lh9GuE8gmoof-Pk_7emp3fsyj9pq16DRiDaLtOdprH-njpOYqvtT5Uf_QspFc_RwD_pdq9UJWCeLxFkRTsYR5WSjhMFcl767c4Cwp_oZPYhaHd1x7aU1emH-9oarrM__tr1hSmGoAc2I0gUSkAYFueaTUSy5e5d9QKDfjVljDRc7Yrp6qAAfd1OuDdk1XYIjrqTHk1T1oqGGlcd3lRM_dKSsW5I_YqgKMrjwNt8yOKcdKBrgQhgC42GZbFDRVJDJHs_Hq32xo-2s3PJ8UZ_alN4wv8EbuwB987_FHBTc_XAULHPvp0mCv2C5h0V2A7gzccv30A","expirationTimestamp":"2021-01-29T22:29:56Z"}}`,
 					"providerName":             "provider1",
 				},
 				Readonly: true,
@@ -327,6 +330,41 @@ func TestNodePublishVolume(t *testing.T) {
 					},
 				},
 			},
+			rotationConfig: &rotationConfig{
+				enabled:               true,
+				rotationCacheDuration: -1 * time.Minute, // Using negative interval to pass the rotation interval check in unit tests
+			},
+		},
+		{
+			name: "volume mount with rotation but skipped",
+			nodePublishVolReq: &csi.NodePublishVolumeRequest{
+				VolumeCapability: &csi.VolumeCapability{},
+				VolumeId:         "testvolid1",
+				TargetPath:       targetPath(t),
+				VolumeContext: map[string]string{
+					"secretProviderClass": "provider1",
+					csiPodName:            "pod1",
+					csiPodNamespace:       "default",
+					csiPodUID:             "poduid1",
+				},
+				Readonly: true,
+			},
+			initObjects: []client.Object{
+				&secretsstorev1.SecretProviderClass{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "provider1",
+						Namespace: "default",
+					},
+					Spec: secretsstorev1.SecretProviderClassSpec{
+						Provider:   "provider1",
+						Parameters: map[string]string{"parameter1": "value1"},
+					},
+				},
+			},
+			rotationConfig: &rotationConfig{
+				enabled:               true,
+				rotationCacheDuration: time.Minute,
+			},
 		},
 	}
 
@@ -341,7 +379,7 @@ func TestNodePublishVolume(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			r := mocks.NewFakeReporter()
 
-			ns, err := testNodeServer(t, fake.NewClientBuilder().WithScheme(s).WithObjects(test.initObjects...).Build(), r)
+			ns, err := testNodeServer(t, fake.NewClientBuilder().WithScheme(s).WithObjects(test.initObjects...).Build(), r, test.rotationConfig)
 			if err != nil {
 				t.Fatalf("expected error to be nil, got: %+v", err)
 			}
@@ -368,8 +406,13 @@ func TestNodePublishVolume(t *testing.T) {
 				if err != nil {
 					t.Fatalf("expected err to be nil, got: %v", err)
 				}
-				if len(mnts) == 0 {
-					t.Errorf("expected mounts...: %v", mnts)
+				expectedMounts := 1
+				if ns.rotationConfig.enabled && ns.rotationConfig.rotationCacheDuration > 0 {
+					// If due to rotation interval, NodePublishVolume has skipped, there should not be any mount operation
+					expectedMounts = 0
+				}
+				if len(mnts) != expectedMounts {
+					t.Errorf("[Number of mounts] want : %d, got mount: %d", expectedMounts, len(mnts))
 				}
 			}
 		})
@@ -384,7 +427,7 @@ func TestNodeUnpublishVolume(t *testing.T) {
 	)
 
 	r := mocks.NewFakeReporter()
-	ns, err := testNodeServer(t, fake.NewClientBuilder().WithScheme(s).Build(), r)
+	ns, err := testNodeServer(t, fake.NewClientBuilder().WithScheme(s).Build(), r, &rotationConfig{})
 	if err != nil {
 		t.Fatalf("expected error to be nil, got: %+v", err)
 	}
@@ -463,7 +506,7 @@ func TestNodeUnpublishVolume_Error(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			r := mocks.NewFakeReporter()
-			ns, err := testNodeServer(t, fake.NewClientBuilder().WithScheme(s).Build(), r)
+			ns, err := testNodeServer(t, fake.NewClientBuilder().WithScheme(s).Build(), r, &rotationConfig{})
 			if err != nil {
 				t.Fatalf("expected error to be nil, got: %+v", err)
 			}

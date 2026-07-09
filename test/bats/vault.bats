@@ -121,6 +121,8 @@ EOF
   # verify rotated value
   result=$(kubectl exec secrets-store-rotation -- cat /mnt/secrets-store/foo)
   [[ "$result" == "rotated" ]]
+
+  archive_info
 }
 
 @test "CSI inline volume test with pod portability - unmount succeeds" {

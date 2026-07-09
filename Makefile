@@ -29,12 +29,12 @@ E2E_PROVIDER_IMAGE_NAME ?= e2e-provider
 
 # Release version is the current supported release for the driver
 # Update this version when the helm chart is being updated for release
-RELEASE_VERSION := v1.5.6
-IMAGE_VERSION ?= v1.5.6
+RELEASE_VERSION := v1.6.0
+IMAGE_VERSION ?= v1.6.0
 
 # Use a custom version for E2E tests if we are testing in CI
 ifdef CI
-override IMAGE_VERSION := v1.5.0-e2e-$(BUILD_COMMIT)
+override IMAGE_VERSION := v1.6.0-e2e-$(BUILD_COMMIT)
 endif
 
 IMAGE_TAG=$(REGISTRY)/$(IMAGE_NAME):$(IMAGE_VERSION)
@@ -103,7 +103,7 @@ KIND_VERSION ?= 0.27.0
 KUBERNETES_VERSION ?= 1.30.2
 KUBECTL_VERSION ?= 1.30.2
 BATS_VERSION ?= 1.4.1
-TRIVY_VERSION ?= 0.57.1
+TRIVY_VERSION ?= 0.69.3
 PROTOC_VERSION ?= 3.20.1
 SHELLCHECK_VER ?= v0.8.0
 YQ_VERSION ?= v4.11.2
@@ -407,9 +407,7 @@ e2e-provider-deploy:
 e2e-deploy-manifest:
 	kubectl apply -f manifest_staging/deploy/csidriver.yaml
 	kubectl apply -f manifest_staging/deploy/rbac-secretproviderclass.yaml
-	kubectl apply -f manifest_staging/deploy/rbac-secretproviderrotation.yaml
 	kubectl apply -f manifest_staging/deploy/rbac-secretprovidersyncing.yaml
-	kubectl apply -f manifest_staging/deploy/rbac-secretprovidertokenrequest.yaml
 	kubectl apply -f manifest_staging/deploy/secrets-store.csi.x-k8s.io_secretproviderclasses.yaml
 	kubectl apply -f manifest_staging/deploy/secrets-store.csi.x-k8s.io_secretproviderclasspodstatuses.yaml
 	kubectl apply -f manifest_staging/deploy/role-secretproviderclasses-admin.yaml
@@ -440,7 +438,8 @@ e2e-helm-deploy:
 		--set tokenRequests[0].audience="aud1" \
 		--set tokenRequests[1].audience="aud2" \
 		--set tokenRequests[2].audience="conjur" \
-		--set tokenRequests[3].audience="api://AzureADTokenExchange"
+		--set tokenRequests[3].audience="api://AzureADTokenExchange" \
+		--set tokenRequests[4].audience="sts.amazonaws.com"
 
 .PHONY: e2e-helm-upgrade
 e2e-helm-upgrade:
@@ -464,7 +463,8 @@ e2e-helm-deploy-release:
 		--set syncSecret.enabled=true \
 		--set enableSecretRotation=true \
 		--set rotationPollInterval=30s \
-		--set tokenRequests[0].audience="api://AzureADTokenExchange"
+		--set tokenRequests[0].audience="api://AzureADTokenExchange" \
+		--set tokenRequests[1].audience="sts.amazonaws.com"
 
 .PHONY: e2e-kind-cleanup
 e2e-kind-cleanup:
@@ -502,6 +502,10 @@ e2e-aws:
 e2e-conjur:
 	bats -t test/bats/conjur.bats
 
+.PHONY: e2e-openbao
+e2e-openbao:
+	bats -t test/bats/openbao.bats
+
 ##@ Generate
 
 .PHONY: manifests
@@ -531,31 +535,9 @@ manifests: $(CONTROLLER_GEN) $(KUSTOMIZE)  ## Generate manifests e.g. CRD, RBAC 
 	@sed -i '1s/^/{{ if .Values.syncSecret.enabled }}\n/gm; s/namespace: .*/namespace: {{ .Release.Namespace }}/gm; $$s/$$/\n{{ end }}/gm' manifest_staging/charts/secrets-store-csi-driver/templates/role-syncsecret_binding.yaml
 	@sed -i '/^roleRef:/i \ \ labels:\n{{ include \"sscd.labels\" . | indent 4 }}' manifest_staging/charts/secrets-store-csi-driver/templates/role-syncsecret_binding.yaml
 
-	# Generate rotation specific RBAC
-	$(CONTROLLER_GEN) rbac:roleName=secretproviderrotation-role paths="./pkg/rotation" output:dir=config/rbac-rotation
-	$(KUSTOMIZE) build config/rbac-rotation -o manifest_staging/deploy/rbac-secretproviderrotation.yaml
-	cp config/rbac-rotation/role.yaml manifest_staging/charts/secrets-store-csi-driver/templates/role-rotation.yaml
-	cp config/rbac-rotation/role_binding.yaml manifest_staging/charts/secrets-store-csi-driver/templates/role-rotation_binding.yaml
-	@sed -i '1s/^/{{ if .Values.enableSecretRotation }}\n/gm; $$s/$$/\n{{ end }}/gm' manifest_staging/charts/secrets-store-csi-driver/templates/role-rotation.yaml
-	@sed -i '/^rules:/i \ \ labels:\n{{ include \"sscd.labels\" . | indent 4 }}' manifest_staging/charts/secrets-store-csi-driver/templates/role-rotation.yaml
-	@sed -i '1s/^/{{ if .Values.enableSecretRotation }}\n/gm; s/namespace: .*/namespace: {{ .Release.Namespace }}/gm; $$s/$$/\n{{ end }}/gm' manifest_staging/charts/secrets-store-csi-driver/templates/role-rotation_binding.yaml
-	@sed -i '/^roleRef:/i \ \ labels:\n{{ include \"sscd.labels\" . | indent 4 }}' manifest_staging/charts/secrets-store-csi-driver/templates/role-rotation_binding.yaml
-
-	# Generate token requests specific RBAC
-	$(CONTROLLER_GEN) rbac:roleName=secretprovidertokenrequest-role paths="./controllers/tokenrequest" output:dir=config/rbac-tokenrequest
-	$(KUSTOMIZE) build config/rbac-tokenrequest -o manifest_staging/deploy/rbac-secretprovidertokenrequest.yaml
-	cp config/rbac-tokenrequest/role.yaml manifest_staging/charts/secrets-store-csi-driver/templates/role-tokenrequest.yaml
-	cp config/rbac-tokenrequest/role_binding.yaml manifest_staging/charts/secrets-store-csi-driver/templates/role-tokenrequest_binding.yaml
-	@sed -i '1s/^/{{ if .Values.tokenRequests }}\n/gm; $$s/$$/\n{{ end }}/gm' manifest_staging/charts/secrets-store-csi-driver/templates/role-tokenrequest.yaml
-	@sed -i '/^rules:/i \ \ labels:\n{{ include \"sscd.labels\" . | indent 4 }}' manifest_staging/charts/secrets-store-csi-driver/templates/role-tokenrequest.yaml
-	@sed -i '1s/^/{{ if .Values.tokenRequests }}\n/gm; s/namespace: .*/namespace: {{ .Release.Namespace }}/gm; $$s/$$/\n{{ end }}/gm' manifest_staging/charts/secrets-store-csi-driver/templates/role-tokenrequest_binding.yaml
-	@sed -i '/^roleRef:/i \ \ labels:\n{{ include \"sscd.labels\" . | indent 4 }}' manifest_staging/charts/secrets-store-csi-driver/templates/role-tokenrequest_binding.yaml
-
 .PHONY: generate-protobuf
 generate-protobuf: $(PROTOC) $(PROTOC_GEN_GO) $(PROTOC_GEN_GO_GRPC) # generates protobuf
 	@PATH=$(PATH):$(TOOLS_BIN_DIR) $(PROTOC) -I . provider/v1alpha1/service.proto --go-grpc_out=require_unimplemented_servers=false:. --go_out=.
-	# Update boilerplate for the generated file.
-	cat hack/boilerplate.go.txt provider/v1alpha1/service_grpc.pb.go > tmpfile && mv tmpfile provider/v1alpha1/service_grpc.pb.go
 
 ## Release
 

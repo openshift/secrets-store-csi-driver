@@ -1,16 +1,5 @@
 // Copyright The OpenTelemetry Authors
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: Apache-2.0
 
 package metric // import "go.opentelemetry.io/otel/metric"
 
@@ -37,10 +26,12 @@ type Int64Observable interface {
 // assumed the to be the cumulative sum of the count.
 //
 // Warning: Methods may be added to this interface in minor releases. See
-// [go.opentelemetry.io/otel/metric] package documentation on API
-// implementation for information on how to set default behavior for
-// unimplemented methods.
+// package documentation on API implementation for information on how to set
+// default behavior for unimplemented methods.
 type Int64ObservableCounter interface {
+	// Users of the interface can ignore this. This embedded type is only used
+	// by implementations of this interface. See the "API Implementations"
+	// section of the package documentation for more information.
 	embedded.Int64ObservableCounter
 
 	Int64Observable
@@ -80,8 +71,9 @@ func (c Int64ObservableCounterConfig) Callbacks() []Int64Callback {
 }
 
 // Int64ObservableCounterOption applies options to a
-// [Int64ObservableCounterConfig]. See [Int64ObservableOption] and [Option] for
-// other options that can be used as an Int64ObservableCounterOption.
+// [Int64ObservableCounterConfig]. See [Int64ObservableOption] and
+// [InstrumentOption] for other options that can be used as an
+// Int64ObservableCounterOption.
 type Int64ObservableCounterOption interface {
 	applyInt64ObservableCounter(Int64ObservableCounterConfig) Int64ObservableCounterConfig
 }
@@ -92,10 +84,12 @@ type Int64ObservableCounterOption interface {
 // be the cumulative sum of the count.
 //
 // Warning: Methods may be added to this interface in minor releases. See
-// [go.opentelemetry.io/otel/metric] package documentation on API
-// implementation for information on how to set default behavior for
-// unimplemented methods.
+// package documentation on API implementation for information on how to set
+// default behavior for unimplemented methods.
 type Int64ObservableUpDownCounter interface {
+	// Users of the interface can ignore this. This embedded type is only used
+	// by implementations of this interface. See the "API Implementations"
+	// section of the package documentation for more information.
 	embedded.Int64ObservableUpDownCounter
 
 	Int64Observable
@@ -111,7 +105,9 @@ type Int64ObservableUpDownCounterConfig struct {
 
 // NewInt64ObservableUpDownCounterConfig returns a new
 // [Int64ObservableUpDownCounterConfig] with all opts applied.
-func NewInt64ObservableUpDownCounterConfig(opts ...Int64ObservableUpDownCounterOption) Int64ObservableUpDownCounterConfig {
+func NewInt64ObservableUpDownCounterConfig(
+	opts ...Int64ObservableUpDownCounterOption,
+) Int64ObservableUpDownCounterConfig {
 	var config Int64ObservableUpDownCounterConfig
 	for _, o := range opts {
 		config = o.applyInt64ObservableUpDownCounter(config)
@@ -136,7 +132,7 @@ func (c Int64ObservableUpDownCounterConfig) Callbacks() []Int64Callback {
 
 // Int64ObservableUpDownCounterOption applies options to a
 // [Int64ObservableUpDownCounterConfig]. See [Int64ObservableOption] and
-// [Option] for other options that can be used as an
+// [InstrumentOption] for other options that can be used as an
 // Int64ObservableUpDownCounterOption.
 type Int64ObservableUpDownCounterOption interface {
 	applyInt64ObservableUpDownCounter(Int64ObservableUpDownCounterConfig) Int64ObservableUpDownCounterConfig
@@ -147,10 +143,12 @@ type Int64ObservableUpDownCounterOption interface {
 // only made within a callback for this instrument.
 //
 // Warning: Methods may be added to this interface in minor releases. See
-// [go.opentelemetry.io/otel/metric] package documentation on API
-// implementation for information on how to set default behavior for
-// unimplemented methods.
+// package documentation on API implementation for information on how to set
+// default behavior for unimplemented methods.
 type Int64ObservableGauge interface {
+	// Users of the interface can ignore this. This embedded type is only used
+	// by implementations of this interface. See the "API Implementations"
+	// section of the package documentation for more information.
 	embedded.Int64ObservableGauge
 
 	Int64Observable
@@ -190,8 +188,9 @@ func (c Int64ObservableGaugeConfig) Callbacks() []Int64Callback {
 }
 
 // Int64ObservableGaugeOption applies options to a
-// [Int64ObservableGaugeConfig]. See [Int64ObservableOption] and [Option] for
-// other options that can be used as an Int64ObservableGaugeOption.
+// [Int64ObservableGaugeConfig]. See [Int64ObservableOption] and
+// [InstrumentOption] for other options that can be used as an
+// Int64ObservableGaugeOption.
 type Int64ObservableGaugeOption interface {
 	applyInt64ObservableGauge(Int64ObservableGaugeConfig) Int64ObservableGaugeConfig
 }
@@ -199,18 +198,26 @@ type Int64ObservableGaugeOption interface {
 // Int64Observer is a recorder of int64 measurements.
 //
 // Warning: Methods may be added to this interface in minor releases. See
-// [go.opentelemetry.io/otel/metric] package documentation on API
-// implementation for information on how to set default behavior for
-// unimplemented methods.
+// package documentation on API implementation for information on how to set
+// default behavior for unimplemented methods.
 type Int64Observer interface {
+	// Users of the interface can ignore this. This embedded type is only used
+	// by implementations of this interface. See the "API Implementations"
+	// section of the package documentation for more information.
 	embedded.Int64Observer
 
 	// Observe records the int64 value.
-	Observe(value int64, opts ...ObserveOption)
+	//
+	// Use the WithAttributeSet (or, if performance is not a concern,
+	// the WithAttributes) option to include measurement attributes.
+	//
+	// Implementations of this method need to be safe for a user to call
+	// concurrently.
+	Observe(value int64, options ...ObserveOption)
 }
 
 // Int64Callback is a function registered with a Meter that makes observations
-// for an Int64Observerable instrument it is registered with. Calls to the
+// for an Int64Observable instrument it is registered with. Calls to the
 // Int64Observer record measurement values for the Int64Observable.
 //
 // The function needs to complete in a finite amount of time and the deadline
@@ -221,7 +228,11 @@ type Int64Observer interface {
 // attributes as another Int64Callbacks also registered for the same
 // instrument.
 //
-// The function needs to be concurrent safe.
+// The function needs to be reentrant and concurrent safe.
+//
+// Note that Go's mutexes are not reentrant, and locking a mutex takes
+// an indefinite amount of time. It is therefore advised to avoid
+// using mutexes inside callbacks.
 type Int64Callback func(context.Context, Int64Observer) error
 
 // Int64ObservableOption applies options to int64 Observer instruments.
@@ -240,7 +251,9 @@ func (o int64CallbackOpt) applyInt64ObservableCounter(cfg Int64ObservableCounter
 	return cfg
 }
 
-func (o int64CallbackOpt) applyInt64ObservableUpDownCounter(cfg Int64ObservableUpDownCounterConfig) Int64ObservableUpDownCounterConfig {
+func (o int64CallbackOpt) applyInt64ObservableUpDownCounter(
+	cfg Int64ObservableUpDownCounterConfig,
+) Int64ObservableUpDownCounterConfig {
 	cfg.callbacks = append(cfg.callbacks, o.cback)
 	return cfg
 }

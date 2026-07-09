@@ -12,10 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-REGISTRY?=docker.io/deislabs
+REGISTRY?=gcr.io/k8s-staging-csi-secrets-store
 IMAGE_NAME=driver
 CRD_IMAGE_NAME=driver-crds
-IMAGE_VERSION?=v1.5.6
+# Image version for the driver and CRDs release
+IMAGE_VERSION?=v1.6.0
 BUILD_TIMESTAMP := $(shell date +%Y-%m-%d-%H:%M)
 BUILD_COMMIT := $(shell git rev-parse --short HEAD)
 IMAGE_TAG=$(REGISTRY)/$(IMAGE_NAME):$(IMAGE_VERSION)
