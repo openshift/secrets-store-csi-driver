@@ -51,9 +51,9 @@ assert_not_match() {
 }
 
 wait_for_process(){
-  wait_time="$1"
-  sleep_time="$2"
-  cmd="$3"
+  local wait_time="$1"
+  local sleep_time="$2"
+  local cmd="$3"
   while [ "$wait_time" -gt 0 ]; do
     if eval "$cmd"; then
       return 0
@@ -79,6 +79,19 @@ check_secret_deleted() {
 
   result=$(kubectl get secret -n ${namespace} | grep "^${secret}$" | wc -l)
   [[ "$result" -eq 0 ]]
+}
+
+# check_file_content runs a command that prints a file's contents (e.g. a
+# `kubectl exec ... -- cat <file>` command) and compares the output against
+# an expected value, ignoring any trailing carriage returns.
+# Usage: check_file_content "<cmd>" "<expected value>"
+check_file_content() {
+  local cmd="$1"
+  local expected="$2"
+  local result
+
+  result=$(eval "$cmd")
+  [[ "${result//$'\r'}" == "$expected" ]]
 }
 
 # Usage:

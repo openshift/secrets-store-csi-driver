@@ -173,11 +173,13 @@ setup_file() {
 @test "CSI inline volume test with rotation - read gcp kv secret from pod" {
   echo -n "secret-b" | gcloud secrets versions add ${SECRET_ID} --data-file=-
 
-  # wait for secret rotation
-  sleep 180
+  # Rotation depends on kubelet's own republish cadence rather than a fixed
+  # interval, so a fixed sleep would either flake or waste CI time; see
+  # vault.bats "CSI inline volume test with rotation" for the full
+  # rationale.
+  run wait_for_process 300 20 "check_file_content 'kubectl exec secrets-store-inline-crd --namespace=$NAMESPACE -- cat /mnt/secrets-store/$FILE_NAME' secret-b"
+  assert_success
   archive_info
-  result=$(kubectl exec secrets-store-inline-crd --namespace=$NAMESPACE -- cat /mnt/secrets-store/$FILE_NAME)
-  [[ "${result//$'\r'}" == "secret-b" ]]
 
 }
 

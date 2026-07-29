@@ -116,18 +116,17 @@ EOF
   # update the secret value
   kubectl exec vault-0 --namespace=vault -- vault kv put secret/rotation foo=rotated
 
-  # In v1.6.0 the dedicated rotation reconciler was removed. Rotation now
-  # depends on kubelet calling NodePublishVolume for republish.
-  # rotation-poll-interval (120s) acts as a minimum cache duration, not a
-  # polling interval. Kubelet's republish cycle runs on its own ~60-100s
-  # interval, not synchronized with the cache. Sleeping exactly 120s creates
-  # a race; the extra 30s buffer ensures kubelet completes at least one
-  # republish cycle after the cache expires.
-  sleep 150
-
-  # verify rotated value
-  result=$(kubectl exec secrets-store-rotation -- cat /mnt/secrets-store/foo)
-  [[ "$result" == "rotated" ]]
+  # SSCSI Operator deploys the operand with "--rotation-poll-interval=2m".
+  # In v1.6.0 the dedicated rotation reconciler was removed, so rotation is
+  # now driven entirely by kubelet's periodic NodePublishVolume republish
+  # calls. rotation-poll-interval only sets a minimum cache duration inside
+  # the driver; it is not synchronized with kubelet's own republish cadence
+  # (~60-100s), so the rotated value only becomes visible sometime after
+  # that cache window expires. A fixed sleep would either flake (too short)
+  # or waste CI time (too long), so poll instead: retry every 20s for up to
+  # 300s, returning as soon as the rotated value is observed.
+  run wait_for_process 300 20 "check_file_content 'kubectl exec secrets-store-rotation -- cat /mnt/secrets-store/foo' rotated"
+  assert_success
 
   archive_info
 }
