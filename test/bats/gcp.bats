@@ -220,7 +220,7 @@ teardown_file() {
     --quiet
 
   gcloud iam workload-identity-pools delete $GCP_WORKLOAD_IDENTITY_POOL \
-    --location=$LOCATIONl \
+    --location=$LOCATION \
     --project=$GCP_PROJECT_ID \
     --quiet
 
