@@ -263,11 +263,18 @@ shellcheck: $(SHELLCHECK)
 
 .PHONY: build
 build: ## Build Secret Store CSI Driver binary
-	GOPROXY=$(GOPROXY) CGO_ENABLED=0 GOOS=linux go build -a -ldflags $(LDFLAGS) -o _output/secrets-store-csi ./cmd/secrets-store-csi-driver
+	@if GOEXPERIMENT=strictfipsruntime go version >/dev/null 2>&1; then \
+		echo "strictfipsruntime is supported, building with FIPS compliance"; \
+		set -x; GOPROXY=$(GOPROXY) CGO_ENABLED=1 GOEXPERIMENT=strictfipsruntime GOOS=linux go build -mod=vendor -a -tags "strictfipsruntime,openssl" -ldflags $(LDFLAGS) -o _output/secrets-store-csi ./cmd/secrets-store-csi-driver; \
+	else \
+		echo "WARN: building without FIPS support, GOEXPERIMENT strictfipsruntime is not available in the go compiler"; \
+		echo "WARN: this build cannot be used in CI or production, due to lack of FIPS!!"; \
+		set -x; GOPROXY=$(GOPROXY) CGO_ENABLED=1 GOOS=linux go build -mod=vendor -a -ldflags $(LDFLAGS) -o _output/secrets-store-csi ./cmd/secrets-store-csi-driver; \
+	fi
 
 .PHONY: build-e2e-provider
 build-e2e-provider:
-	cd test/e2eprovider && GOPROXY=$(GOPROXY) CGO_ENABLED=0 GOOS=linux go build -a -tags "e2e" -o e2e-provider
+	cd test/e2eprovider && GOPROXY=$(GOPROXY) CGO_ENABLED=0 GOOS=linux go build -mod=vendor -a -tags "e2e" -o e2e-provider
 
 .PHONY: build-windows
 build-windows:
@@ -475,7 +482,7 @@ e2e-provider:
 	bats -t -T test/bats/e2e-provider.bats
 
 .PHONY: e2e-azure
-e2e-azure: $(AZURE_CLI)
+e2e-azure:
 	bats -t test/bats/azure.bats
 
 .PHONY: e2e-vault
