@@ -29,8 +29,8 @@ E2E_PROVIDER_IMAGE_NAME ?= e2e-provider
 
 # Release version is the current supported release for the driver
 # Update this version when the helm chart is being updated for release
-RELEASE_VERSION := v1.6.0
-IMAGE_VERSION ?= v1.6.0
+RELEASE_VERSION := v1.6.1
+IMAGE_VERSION ?= v1.6.1
 
 # Use a custom version for E2E tests if we are testing in CI
 ifdef CI
@@ -76,7 +76,7 @@ OSVERSION ?= 1809
 # Output type of docker buildx build
 OUTPUT_TYPE ?= registry
 BUILDX_BUILDER_NAME ?= img-builder
-QEMU_VERSION ?= 5.2.0-2
+QEMU_VERSION ?= 7.2.0-1
 # pinning buildkit version to v0.10.6 as v0.11.0 is injecting sbom/prov to manifest
 # causing the manifest push to fail
 BUILDKIT_VERSION ?= v0.10.6
@@ -105,7 +105,7 @@ KUBECTL_VERSION ?= 1.30.2
 BATS_VERSION ?= 1.4.1
 TRIVY_VERSION ?= 0.69.3
 PROTOC_VERSION ?= 3.20.1
-SHELLCHECK_VER ?= v0.8.0
+SHELLCHECK_VER ?= v0.11.0
 YQ_VERSION ?= v4.11.2
 
 # For aws integration tests
@@ -173,9 +173,9 @@ $(CONTROLLER_GEN): $(TOOLS_MOD_DIR)/go.mod $(TOOLS_MOD_DIR)/go.sum $(TOOLS_MOD_D
 	cd $(TOOLS_MOD_DIR) && \
 		GOPROXY=$(GOPROXY) go build -tags=tools -o $(TOOLS_BIN_DIR)/controller-gen sigs.k8s.io/controller-tools/cmd/controller-gen
 
-$(GOLANGCI_LINT): ## Build golangci-lint from tools folder.
+$(GOLANGCI_LINT): $(TOOLS_MOD_DIR)/go.mod $(TOOLS_MOD_DIR)/go.sum $(TOOLS_MOD_DIR)/tools.go ## Build golangci-lint from tools folder.
 	cd $(TOOLS_MOD_DIR) && \
-		GOPROXY=$(GOPROXY) go build -o $(TOOLS_BIN_DIR)/golangci-lint github.com/golangci/golangci-lint/cmd/golangci-lint
+		GOPROXY=$(GOPROXY) go build -o $(TOOLS_BIN_DIR)/golangci-lint github.com/golangci/golangci-lint/v2/cmd/golangci-lint
 
 $(KUSTOMIZE): ## Build kustomize from tools folder.
 	cd $(TOOLS_MOD_DIR) && \
@@ -215,15 +215,18 @@ $(BATS): ## Install bats for running the tests
 $(ENVSUBST): ## Install envsubst for running the tests
 	envsubst -V || (apt-get -o Acquire::Retries=30 update && apt-get -o Acquire::Retries=30 install gettext-base -y)
 
+$(PROTOC): OS := $(shell uname -s | sed 's/Darwin/osx/;s/Linux/linux/')
+$(PROTOC): ARCH := $(shell uname -m | sed 's/arm64/aarch_64/')
 $(PROTOC): ## Install protoc
-	curl -sSLO https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-linux-x86_64.zip && unzip protoc-${PROTOC_VERSION}-linux-x86_64.zip bin/protoc -d $(TOOLS_DIR) && rm protoc-${PROTOC_VERSION}-linux-x86_64.zip
+	curl -sSLO https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-$(OS)-$(ARCH).zip && unzip protoc-${PROTOC_VERSION}-$(OS)-$(ARCH).zip bin/protoc -d $(TOOLS_DIR) && rm protoc-${PROTOC_VERSION}-$(OS)-$(ARCH).zip
 
 $(YQ): ## Install yq for running the tests
 	curl -LO https://github.com/mikefarah/yq/releases/download/$(YQ_VERSION)/yq_linux_amd64 && chmod +x ./yq_linux_amd64 && mv yq_linux_amd64 /usr/local/bin/yq
 
 SHELLCHECK := $(TOOLS_BIN_DIR)/shellcheck-$(SHELLCHECK_VER)
 $(SHELLCHECK): OS := $(shell uname | tr '[:upper:]' '[:lower:]')
-$(SHELLCHECK): ARCH := $(shell uname -m)
+# Substitution needed for macOS
+$(SHELLCHECK): ARCH := $(shell uname -m | sed 's/arm64/aarch64/')
 $(SHELLCHECK):
 	mkdir -p $(TOOLS_BIN_DIR)
 	rm -rf "$(SHELLCHECK)*"
@@ -246,7 +249,7 @@ lint: $(GOLANGCI_LINT) ## Run lint
 	cd test/e2eprovider && $(GOLANGCI_LINT) run --build-tags e2e --timeout=5m -v
 
 lint-full: $(GOLANGCI_LINT)
-	$(GOLANGCI_LINT) run -v --fast=false
+	$(GOLANGCI_LINT) run -v
 
 lint-charts: $(HELM) ## Run lint on helm charts
 	helm lint charts/secrets-store-csi-driver

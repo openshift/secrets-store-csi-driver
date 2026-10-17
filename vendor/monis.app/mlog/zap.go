@@ -1,6 +1,7 @@
 package mlog
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"fmt"
@@ -34,6 +35,8 @@ func newLogr(ctx context.Context, encoding string, klogLevel klog.Level) (logr.L
 				flush = func() {}
 			}
 		}
+
+		w = &trimWriter{w: w}
 
 		return textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(int(klogLevel)), textlogger.Output(w))), flush, nil
 	}
@@ -89,7 +92,13 @@ func newLogr(ctx context.Context, encoding string, klogLevel klog.Level) (logr.L
 }
 
 func newZapr(level zap.AtomicLevel, addStack zapcore.LevelEnabler, encoding, path string, f func(config *zap.Config), opts ...zap.Option) (logr.Logger, func(), error) {
-	opts = append([]zap.Option{zap.AddStacktrace(addStack)}, opts...)
+	opts = append([]zap.Option{zap.WrapCore(func(core zapcore.Core) zapcore.Core {
+		return &trimCore{core: core}
+	})}, opts...)
+
+	if encoding == "json" { // stack traces are too noisy otherwise
+		opts = append([]zap.Option{zap.AddStacktrace(addStack)}, opts...)
+	}
 
 	config := zap.Config{
 		Level:             level,
@@ -182,4 +191,57 @@ func humanDurationEncoder(d time.Duration, enc zapcore.PrimitiveArrayEncoder) {
 
 func humanTimeEncoder(t time.Time, enc zapcore.PrimitiveArrayEncoder) {
 	enc.AppendString(t.Local().Format(time.RFC1123))
+}
+
+var _ zapcore.Core = &trimCore{}
+
+type trimCore struct {
+	core zapcore.Core
+}
+
+func (t *trimCore) Enabled(level zapcore.Level) bool {
+	return t.core.Enabled(level)
+}
+
+func (t *trimCore) With(fields []zapcore.Field) zapcore.Core {
+	return &trimCore{core: t.core.With(fields)}
+}
+
+func (t *trimCore) Check(ent zapcore.Entry, ce *zapcore.CheckedEntry) *zapcore.CheckedEntry {
+	if strings.HasSuffix(ent.Message, "\n") {
+		ent.Message = ent.Message[:len(ent.Message)-1]
+	}
+
+	if downstream := t.core.Check(ent, ce); downstream != nil {
+		return downstream
+	}
+
+	return ce
+}
+
+func (t *trimCore) Write(ent zapcore.Entry, fields []zapcore.Field) error {
+	return t.core.Write(ent, fields)
+}
+
+func (t *trimCore) Sync() error {
+	return t.core.Sync()
+}
+
+var _ io.Writer = &trimWriter{}
+
+type trimWriter struct {
+	w io.Writer
+}
+
+var brokenNewlineThenQuoteThenActualNewline = []byte(`\n"
+`)
+
+func (t *trimWriter) Write(p []byte) (int, error) {
+	if bytes.HasSuffix(p, brokenNewlineThenQuoteThenActualNewline) {
+		// overwrite the broken newline with the quote and correct newline
+		p[len(p)-4] = '"'
+		p[len(p)-3] = '\n'
+		p = p[:len(p)-2] // then just slice off the original quote and newline
+	}
+	return t.w.Write(p)
 }
