@@ -1,5 +1,4 @@
 //go:build !linux && !windows
-// +build !linux,!windows
 
 /*
 Copyright 2014 The Kubernetes Authors.
@@ -74,8 +73,8 @@ func (mounter *Mounter) IsLikelyNotMountPoint(file string) (bool, error) {
 	return true, errUnsupported
 }
 
-// canSafelySkipMountPointCheck always returns false on unsupported platforms
-func (mounter *Mounter) canSafelySkipMountPointCheck() bool {
+// CanSafelySkipMountPointCheck always returns false on unsupported platforms
+func (mounter *Mounter) CanSafelySkipMountPointCheck() bool {
 	return false
 }
 
