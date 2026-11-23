@@ -302,8 +302,8 @@ k8s.io/klog/v2/internal/severity
 k8s.io/klog/v2/internal/sloghandler
 k8s.io/klog/v2/internal/verbosity
 k8s.io/klog/v2/textlogger
-# k8s.io/kube-openapi v0.0.0-20261014044854-ca3452a79603
-## explicit; go 1.27.0
+# k8s.io/kube-openapi v0.0.0-20261014044854-ca3452a79603 => k8s.io/kube-openapi v0.0.0-20260821135717-be32def86098
+## explicit; go 1.25.0
 k8s.io/kube-openapi/pkg/util
 # k8s.io/utils v0.0.0-20261023123148-ca04ba58ecab
 ## explicit; go 1.26
@@ -325,7 +325,7 @@ sigs.k8s.io/json/internal/golang/encoding/json
 sigs.k8s.io/randfill
 sigs.k8s.io/randfill/bytesource
 # sigs.k8s.io/secrets-store-csi-driver v0.0.0-00010101000000-000000000000 => ../..
-## explicit; go 1.27.0
+## explicit; go 1.26.0
 sigs.k8s.io/secrets-store-csi-driver/provider/v1alpha1
 # sigs.k8s.io/structured-merge-diff/v6 v6.4.2
 ## explicit; go 1.23
@@ -334,3 +334,4 @@ sigs.k8s.io/structured-merge-diff/v6/value
 ## explicit; go 1.22
 sigs.k8s.io/yaml
 # sigs.k8s.io/secrets-store-csi-driver => ../..
+# k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20260821135717-be32def86098
