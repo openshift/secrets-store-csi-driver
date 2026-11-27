@@ -2,7 +2,10 @@ module sigs.k8s.io/secrets-store-csi-driver/test/e2eprovider
 
 go 1.24.6
 
-replace sigs.k8s.io/secrets-store-csi-driver => ../..
+replace (
+	golang.org/x/net => github.com/openshift-sustaining/net v0.50.0-sec.3
+	sigs.k8s.io/secrets-store-csi-driver => ../..
+)
 
 require (
 	github.com/google/go-cmp v0.6.0
@@ -40,9 +43,9 @@ require (
 	go.uber.org/atomic v1.10.0 // indirect
 	go.uber.org/multierr v1.8.0 // indirect
 	go.uber.org/zap v1.24.0 // indirect
-	golang.org/x/net v0.38.0 // indirect
-	golang.org/x/sys v0.31.0 // indirect
-	golang.org/x/text v0.23.0 // indirect
+	golang.org/x/net v0.49.0 // indirect
+	golang.org/x/sys v0.41.0 // indirect
+	golang.org/x/text v0.34.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240123012728-ef4313101c80 // indirect
 	google.golang.org/protobuf v1.33.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
